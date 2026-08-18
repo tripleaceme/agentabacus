@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agentledger collect --quiet || true",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}

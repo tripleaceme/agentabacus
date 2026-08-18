@@ -1,0 +1,35 @@
+[project]
+name = "agentledger"
+version = "0.1.0"
+description = "Local-first analytics for AI coding agents. Reads the session logs already on your disk."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Ayoade Adegbite" }]
+keywords = ["claude", "codex", "llm", "analytics", "duckdb", "agents", "cost"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = [
+    "duckdb>=1.0",
+    "typer>=0.12",
+    "rich>=13.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/tripleaceme/agentledger"
+Issues = "https://github.com/tripleaceme/agentledger/issues"
+
+[project.scripts]
+agentledger = "agentledger.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agentledger"]

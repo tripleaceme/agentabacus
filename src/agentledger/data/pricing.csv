@@ -1,0 +1,12 @@
+model_id,speed,valid_from,valid_to,input_per_mtok,output_per_mtok,cache_read_per_mtok,cache_write_5m_per_mtok,cache_write_1h_per_mtok,source_note
+claude-opus-5,standard,2020-01-01,,5.00,25.00,0.50,6.25,10.00,anthropic list price
+claude-opus-5,fast,2020-01-01,,10.00,50.00,1.00,12.50,20.00,fast mode research preview
+claude-opus-4-8,standard,2020-01-01,,5.00,25.00,0.50,6.25,10.00,anthropic list price
+claude-opus-4-7,standard,2020-01-01,,5.00,25.00,0.50,6.25,10.00,anthropic list price
+claude-opus-4-6,standard,2020-01-01,,5.00,25.00,0.50,6.25,10.00,anthropic list price
+claude-fable-5,standard,2020-01-01,,10.00,50.00,1.00,12.50,20.00,anthropic list price
+claude-mythos-5,standard,2020-01-01,,10.00,50.00,1.00,12.50,20.00,project glasswing
+claude-sonnet-5,standard,2020-01-01,2026-08-31,2.00,10.00,0.20,2.50,4.00,introductory rate
+claude-sonnet-5,standard,2026-09-01,,3.00,15.00,0.30,3.75,6.00,standard rate after intro
+claude-sonnet-4-6,standard,2020-01-01,,3.00,15.00,0.30,3.75,6.00,anthropic list price
+claude-haiku-4-5,standard,2020-01-01,,1.00,5.00,0.10,1.25,2.00,anthropic list price

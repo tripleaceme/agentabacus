@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.DS_Store
+*.duckdb
+*.duckdb.wal
+agentledger_export/
+.pytest_cache/

@@ -1,0 +1,100 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install
+        run: uv pip install --system -e .
+
+      # The dedupe contract is the one invariant that, if broken, makes every
+      # cost figure the tool reports wrong. It runs before anything else.
+      - name: Contract tests
+        run: python tests/test_dedupe.py
+
+      - name: CLI smoke test
+        run: |
+          agentledger --help
+          agentledger doctor
+          agentledger collect
+          agentledger report --since all || true
+
+      # A fresh machine has no agent logs. Collecting nothing must exit 0 and
+      # print something sane rather than traceback -- that is most contributors'
+      # very first run.
+      - name: Empty-environment behaviour
+        env:
+          CLAUDE_CONFIG_DIR: /tmp/definitely-not-here
+          CODEX_HOME: /tmp/definitely-not-here
+          AGENTLEDGER_HOME: /tmp/al-empty
+        run: |
+          agentledger doctor
+          agentledger collect
+
+  pricing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pricing is community-edited. A malformed row would silently zero out
+      # cost for that model, so the CSV is validated on every PR.
+      - name: Validate pricing table
+        run: |
+          python - <<'PY'
+          import csv, sys
+          from datetime import date
+
+          required = [
+              "model_id", "speed", "valid_from", "valid_to",
+              "input_per_mtok", "output_per_mtok", "cache_read_per_mtok",
+              "cache_write_5m_per_mtok", "cache_write_1h_per_mtok", "source_note",
+          ]
+          path = "src/agentledger/data/pricing.csv"
+          rows = list(csv.DictReader(open(path)))
+          errors = []
+
+          if not rows:
+              errors.append("pricing.csv is empty")
+          if rows and list(rows[0].keys()) != required:
+              errors.append(f"columns must be exactly {required}")
+
+          seen = set()
+          for i, r in enumerate(rows, start=2):
+              key = (r["model_id"], r["speed"], r["valid_from"])
+              if key in seen:
+                  errors.append(f"line {i}: duplicate {key}")
+              seen.add(key)
+              try:
+                  date.fromisoformat(r["valid_from"])
+                  if r["valid_to"]:
+                      date.fromisoformat(r["valid_to"])
+              except ValueError as exc:
+                  errors.append(f"line {i}: bad date ({exc})")
+              for col in required[4:9]:
+                  try:
+                      if float(r[col]) < 0:
+                          errors.append(f"line {i}: {col} is negative")
+                  except ValueError:
+                      errors.append(f"line {i}: {col}={r[col]!r} is not a number")
+              if r["speed"] not in {"standard", "fast"}:
+                  errors.append(f"line {i}: speed must be standard or fast")
+
+          for e in errors:
+              print(f"::error file={path}::{e}")
+          sys.exit(1 if errors else 0)
+          PY
