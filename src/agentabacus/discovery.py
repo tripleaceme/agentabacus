@@ -63,7 +63,7 @@ _WALKERS = {"claude_code": _claude_code, "codex": _codex}
 
 
 def discover(sources: list[str] | None = None) -> list[Found]:
-    """Every log file agentledger knows how to read, on this machine, right now."""
+    """Every log file agentabacus knows how to read, on this machine, right now."""
     out: list[Found] = []
     for source, walker in _WALKERS.items():
         if sources and source not in sources:

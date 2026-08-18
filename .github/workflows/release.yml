@@ -5,9 +5,9 @@ name: release
 # to PyPI directly.
 #
 # One-time setup on PyPI (https://pypi.org/manage/account/publishing/):
-#   PyPI project name : agentledger
+#   PyPI project name : agentabacus
 #   Owner             : tripleaceme
-#   Repository name   : agentledger
+#   Repository name   : agentabacus
 #   Workflow name     : release.yml
 #   Environment name  : pypi
 #

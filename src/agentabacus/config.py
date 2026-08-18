@@ -11,9 +11,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-# Where agentledger keeps its own state. Overridable for the same reason.
-AGENTLEDGER_HOME = Path(os.environ.get("AGENTLEDGER_HOME", Path.home() / ".agentledger"))
-DB_PATH = AGENTLEDGER_HOME / "agentledger.duckdb"
+# Where agentabacus keeps its own state. Overridable for the same reason.
+AGENTABACUS_HOME = Path(os.environ.get("AGENTABACUS_HOME", Path.home() / ".agentabacus"))
+DB_PATH = AGENTABACUS_HOME / "agentabacus.duckdb"
 
 # source name -> (env var that may relocate the root, default root)
 CONFIG_ROOTS: dict[str, tuple[str, Path]] = {
@@ -33,5 +33,5 @@ def config_root(source: str) -> Path | None:
 
 
 def ensure_home() -> Path:
-    AGENTLEDGER_HOME.mkdir(parents=True, exist_ok=True)
-    return AGENTLEDGER_HOME
+    AGENTABACUS_HOME.mkdir(parents=True, exist_ok=True)
+    return AGENTABACUS_HOME

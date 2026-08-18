@@ -44,7 +44,7 @@ PRICING_COLUMNS = [
 
 
 def _bundled_csv() -> str:
-    return resources.files("agentledger.data").joinpath("pricing.csv").read_text()
+    return resources.files("agentabacus.data").joinpath("pricing.csv").read_text()
 
 
 def load_rows(override: Path | None = None) -> list[tuple]:

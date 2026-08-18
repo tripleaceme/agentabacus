@@ -1,6 +1,6 @@
-# agentledger — Claude Code plugin
+# agentabacus — Claude Code plugin
 
-Runs `agentledger collect` when a session ends, so usage is archived **before**
+Runs `agentabacus collect` when a session ends, so usage is archived **before**
 Claude Code's cleanup can delete the transcript.
 
 ## Why a plugin rather than a cron job
@@ -20,21 +20,21 @@ A `SessionEnd` hook is the cheapest way to guarantee that:
 ## Install
 
 ```bash
-pipx install agentledger              # the CLI must be on PATH
+pipx install agentabacus              # the CLI must be on PATH
 ```
 
 ```
-/plugin marketplace add tripleaceme/agentledger
-/plugin install agentledger
+/plugin marketplace add tripleaceme/agentabacus
+/plugin install agentabacus
 ```
 
-Then `agentledger report` any time.
+Then `agentabacus report` any time.
 
 ## Notes
 
 - The hook is `|| true`: a collection failure must never interfere with your
   session ending.
-- It writes only to `~/.agentledger/agentledger.duckdb` (or `$AGENTLEDGER_HOME`).
+- It writes only to `~/.agentabacus/agentabacus.duckdb` (or `$AGENTABACUS_HOME`).
   Nothing is uploaded.
 - Other agent CLIs (Codex, Gemini) aren't covered by this hook — for those,
-  run `agentledger collect` on a timer or before reporting.
+  run `agentabacus collect` on a timer or before reporting.

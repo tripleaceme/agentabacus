@@ -36,10 +36,10 @@ jobs:
 
       - name: CLI smoke test
         run: |
-          agentledger --help
-          agentledger doctor
-          agentledger collect
-          agentledger report --since all || true
+          agentabacus --help
+          agentabacus doctor
+          agentabacus collect
+          agentabacus report --since all || true
 
       # A fresh machine has no agent logs. Collecting nothing must exit 0 and
       # print something sane rather than traceback -- that is most contributors'
@@ -48,10 +48,10 @@ jobs:
         env:
           CLAUDE_CONFIG_DIR: /tmp/definitely-not-here
           CODEX_HOME: /tmp/definitely-not-here
-          AGENTLEDGER_HOME: /tmp/al-empty
+          AGENTABACUS_HOME: /tmp/al-empty
         run: |
-          agentledger doctor
-          agentledger collect
+          agentabacus doctor
+          agentabacus collect
 
   pricing:
     runs-on: ubuntu-latest
@@ -71,7 +71,7 @@ jobs:
               "input_per_mtok", "output_per_mtok", "cache_read_per_mtok",
               "cache_write_5m_per_mtok", "cache_write_1h_per_mtok", "source_note",
           ]
-          path = "src/agentledger/data/pricing.csv"
+          path = "src/agentabacus/data/pricing.csv"
           rows = list(csv.DictReader(open(path)))
           errors = []
 

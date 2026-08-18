@@ -1,13 +1,13 @@
 {
-  "name": "agentledger",
+  "name": "agentabacus",
   "owner": {
     "name": "Ayoade Adegbite"
   },
   "plugins": [
     {
-      "name": "agentledger",
+      "name": "agentabacus",
       "source": "./plugin",
-      "description": "Archives this session's token usage and tool calls to your local agentledger database when the session ends, before Claude Code's cleanup can delete the transcript."
+      "description": "Archives this session's token usage and tool calls to your local agentabacus database when the session ends, before Claude Code's cleanup can delete the transcript."
     }
   ]
 }

@@ -1,5 +1,5 @@
 [project]
-name = "agentledger"
+name = "agentabacus"
 version = "0.1.0"
 description = "Local-first analytics for AI coding agents. Reads the session logs already on your disk."
 readme = "README.md"
@@ -21,15 +21,15 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/tripleaceme/agentledger"
-Issues = "https://github.com/tripleaceme/agentledger/issues"
+Homepage = "https://github.com/tripleaceme/agentabacus"
+Issues = "https://github.com/tripleaceme/agentabacus/issues"
 
 [project.scripts]
-agentledger = "agentledger.cli:app"
+agentabacus = "agentabacus.cli:app"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/agentledger"]
+packages = ["src/agentabacus"]

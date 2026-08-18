@@ -1,4 +1,4 @@
-"""agentledger CLI."""
+"""agentabacus CLI."""
 
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ def _table(title: str, columns, rows, formatters) -> None:
 
 def _open(read_only: bool = False):
     if read_only and not DB_PATH.exists():
-        console.print("[yellow]No database yet. Run [bold]agentledger collect[/bold] first.[/yellow]")
+        console.print("[yellow]No database yet. Run [bold]agentabacus collect[/bold] first.[/yellow]")
         raise typer.Exit(1)
     return store.connect()
 
@@ -149,7 +149,7 @@ def report(
     if unpriced:
         console.print(
             f"[yellow]  {_n(unpriced)} request(s) have no pricing row — "
-            f"run [bold]agentledger doctor[/bold][/yellow]"
+            f"run [bold]agentabacus doctor[/bold][/yellow]"
         )
 
     label = _model if by == "model" else str
@@ -239,7 +239,7 @@ def doctor():
         console.print(f"  {src:<12} {kind:<10} {count}")
 
     if not DB_PATH.exists():
-        console.print(f"\n[yellow]No archive yet at {DB_PATH}. Run agentledger collect.[/yellow]")
+        console.print(f"\n[yellow]No archive yet at {DB_PATH}. Run agentabacus collect.[/yellow]")
         return
 
     conn = store.connect()
@@ -261,7 +261,7 @@ def doctor():
 
 @app.command()
 def export(
-    out: Path = typer.Option(Path("./agentledger_export"), "--out"),
+    out: Path = typer.Option(Path("./agentabacus_export"), "--out"),
     fmt: str = typer.Option("parquet", "--format", help="parquet or csv."),
 ):
     """Write the tables out for dbt / Metabase / anything that reads files."""

@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agentledger collect --quiet || true",
+            "command": "agentabacus collect --quiet || true",
             "timeout": 60
           }
         ]

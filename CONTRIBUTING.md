@@ -4,7 +4,7 @@ Two contributions matter more than any others, and both are small.
 
 ## 1. Add or correct a model price
 
-`src/agentledger/data/pricing.csv` — one line, no Python:
+`src/agentabacus/data/pricing.csv` — one line, no Python:
 
 ```csv
 model_id,speed,valid_from,valid_to,input_per_mtok,output_per_mtok,cache_read_per_mtok,cache_write_5m_per_mtok,cache_write_1h_per_mtok,source_note
@@ -20,7 +20,7 @@ Rules:
 
 CI validates column order, date parsing, duplicate keys, and negative values.
 
-Run `agentledger doctor` to see models present in your own data with no pricing row — that list is the to-do list.
+Run `agentabacus doctor` to see models present in your own data with no pricing row — that list is the to-do list.
 
 ## 2. Add an adapter
 
@@ -46,7 +46,7 @@ Things that have already bitten this codebase, so check for them in yours:
 ```bash
 uv venv && uv pip install -e .
 python tests/test_dedupe.py     # the contract tests
-agentledger doctor              # what's discoverable on your machine
+agentabacus doctor              # what's discoverable on your machine
 ```
 
 ## What this project deliberately does not do

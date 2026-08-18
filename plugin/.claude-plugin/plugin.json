@@ -1,8 +1,8 @@
 {
-  "name": "agentledger",
+  "name": "agentabacus",
   "version": "0.1.0",
-  "description": "Archives this session's usage to your local agentledger database when the session ends.",
+  "description": "Archives this session's usage to your local agentabacus database when the session ends.",
   "author": { "name": "Ayoade Adegbite" },
-  "homepage": "https://github.com/tripleaceme/agentledger",
+  "homepage": "https://github.com/tripleaceme/agentabacus",
   "license": "MIT"
 }
