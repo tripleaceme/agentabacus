@@ -1,5 +1,10 @@
 # agentabacus
 
+[![PyPI](https://img.shields.io/pypi/v/agentabacus)](https://pypi.org/project/agentabacus/)
+[![CI](https://github.com/tripleaceme/agentabacus/actions/workflows/ci.yml/badge.svg)](https://github.com/tripleaceme/agentabacus/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/pypi/pyversions/agentabacus)](https://pypi.org/project/agentabacus/)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 **Local-first analytics for AI coding agents.** Every agent CLI writes session logs to your disk in its own format. Nothing reads all of them. `agentabacus` normalizes them into one schema and answers: what did this cost, which model actually finishes the work, and where is the spend going?
 
 No server. No account. No network calls. It reads files that are already on your machine and writes one DuckDB file.
