@@ -16,6 +16,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # setup-python must come first: it provides the matrix interpreter.
+      # Without it, `uv pip install --system` targets the runner's own Python,
+      # which on macOS is Homebrew-managed and refuses installs (PEP 668).
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
