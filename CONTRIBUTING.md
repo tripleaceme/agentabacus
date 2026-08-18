@@ -44,8 +44,8 @@ Things that have already bitten this codebase, so check for them in yours:
 ## Running things
 
 ```bash
-uv venv && uv pip install -e .
-python tests/test_dedupe.py     # the contract tests
+uv venv && uv pip install -e ".[dev]"
+python -m pytest                # the contract tests
 agentabacus doctor              # what's discoverable on your machine
 ```
 

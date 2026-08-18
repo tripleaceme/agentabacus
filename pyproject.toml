@@ -1,6 +1,6 @@
 [project]
 name = "agentabacus"
-version = "0.1.0"
+version = "0.1.1"
 description = "Local-first analytics for AI coding agents. Reads the session logs already on your disk."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,6 +19,9 @@ dependencies = [
     "typer>=0.12",
     "rich>=13.0",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
 
 [project.urls]
 Homepage = "https://github.com/tripleaceme/agentabacus"

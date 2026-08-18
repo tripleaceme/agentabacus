@@ -27,12 +27,13 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Install
-        run: uv pip install --system -e .
+        run: uv pip install --system -e ".[dev]"
 
       # The dedupe contract is the one invariant that, if broken, makes every
       # cost figure the tool reports wrong. It runs before anything else.
+      # Same command the README tells contributors to run.
       - name: Contract tests
-        run: python tests/test_dedupe.py
+        run: python -m pytest -q
 
       - name: CLI smoke test
         run: |

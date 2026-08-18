@@ -41,8 +41,8 @@ jobs:
 
       - name: Contract tests
         run: |
-          uv pip install --system -e .
-          python tests/test_dedupe.py
+          uv pip install --system -e ".[dev]"
+          python -m pytest -q
 
       - run: uv build
 
