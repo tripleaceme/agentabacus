@@ -1,5 +1,9 @@
 # agentabacus
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/tripleaceme/agentabacus/main/assets/social-preview.png" alt="agentabacus — local-first analytics for AI coding agents" width="820">
+</p>
+
 [![PyPI](https://img.shields.io/pypi/v/agentabacus)](https://pypi.org/project/agentabacus/)
 [![CI](https://github.com/tripleaceme/agentabacus/actions/workflows/ci.yml/badge.svg)](https://github.com/tripleaceme/agentabacus/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/pypi/pyversions/agentabacus)](https://pypi.org/project/agentabacus/)
@@ -136,8 +140,7 @@ python tests/test_dedupe.py    # pins the dedupe contract, the TTL split, and to
 | Source | State |
 |---|---|
 | Claude Code | verified against real transcripts |
-| Codex CLI | **shape-agnostic, unverified** — needs someone with real rollout files |
-| Gemini CLI, Cursor, Aider, Cline | not yet written |
+| Codex CLI, Gemini CLI, Cursor, Aider, Cline | open to contribution |
 
 ## Roadmap
 
