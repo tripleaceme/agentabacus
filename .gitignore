@@ -9,3 +9,9 @@ build/
 *.duckdb.wal
 agentabacus_export/
 .pytest_cache/
+
+# assets/ holds only the social preview and its source. Anything else that
+# lands there is a stray file, not a project asset -- keep it out of commits.
+assets/*
+!assets/social-preview.png
+!assets/social-preview.html

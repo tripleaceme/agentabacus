@@ -36,3 +36,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agentabacus"]
+
+# The social preview PNG is 468 KB and belongs in the repo, not in a source
+# distribution -- it took the sdist from ~30 KB to 481 KB.
+[tool.hatch.build.targets.sdist]
+exclude = ["assets/", ".github/", "plugin/"]
