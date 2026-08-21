@@ -75,7 +75,7 @@ def _usage_fields(usage: dict) -> dict:
     }
 
 
-def parse_history(path: Path, start_offset: int = 0) -> Batch:
+def parse_history(path: Path, start_offset: int = 0, on_bytes=None) -> Batch:
     """history.jsonl: prompt text, project, sessionId, epoch-ms timestamp.
 
     Only a hash and a length are kept. The prompt body never enters the
@@ -83,7 +83,7 @@ def parse_history(path: Path, start_offset: int = 0) -> Batch:
     instead of from trust in a downstream filter.
     """
     batch = Batch(byte_offset=start_offset)
-    for record, offset in iter_lines(path, start_offset):
+    for record, offset in iter_lines(path, start_offset, on_bytes):
         batch.byte_offset = offset
         if record.get("__unparsed__"):
             batch.skipped_lines += 1
@@ -104,7 +104,9 @@ def parse_history(path: Path, start_offset: int = 0) -> Batch:
     return batch
 
 
-def parse_transcript(path: Path, start_offset: int = 0, is_subagent: bool = False) -> Batch:
+def parse_transcript(
+    path: Path, start_offset: int = 0, is_subagent: bool = False, on_bytes=None
+) -> Batch:
     batch = Batch(byte_offset=start_offset)
 
     turns: dict[str, Turn] = {}
@@ -113,7 +115,7 @@ def parse_transcript(path: Path, start_offset: int = 0, is_subagent: bool = Fals
     first_ts = last_ts = None
     session_id = thread_id = None
 
-    for record, offset in iter_lines(path, start_offset):
+    for record, offset in iter_lines(path, start_offset, on_bytes):
         batch.byte_offset = offset
         if record.get("__unparsed__"):
             batch.skipped_lines += 1
@@ -224,7 +226,9 @@ def parse_transcript(path: Path, start_offset: int = 0, is_subagent: bool = Fals
     return batch
 
 
-def parse(path: Path, kind: str, start_offset: int = 0) -> Batch:
+def parse(path: Path, kind: str, start_offset: int = 0, on_bytes=None) -> Batch:
     if kind == "history":
-        return parse_history(path, start_offset)
-    return parse_transcript(path, start_offset, is_subagent=(kind == "subagent"))
+        return parse_history(path, start_offset, on_bytes)
+    return parse_transcript(
+        path, start_offset, is_subagent=(kind == "subagent"), on_bytes=on_bytes
+    )

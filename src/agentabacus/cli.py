@@ -6,6 +6,14 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
 from rich.table import Table
 
 from . import collect as collect_mod
@@ -82,7 +90,57 @@ def collect(
     """Read new log data into the local archive. Safe to run repeatedly."""
     conn = store.connect()
     sources = [source] if source else None
-    result = collect_mod.collect(conn, sources=sources, full=full, session_id=session_id)
+
+    # Progress only when a human is watching. Piped output and the SessionEnd
+    # hook must stay clean -- ANSI control codes in a hook's stdout are noise
+    # at best and corrupt a log at worst.
+    show = not quiet and console.is_terminal
+
+    if show:
+        console.print("[dim]Scanning for agent logs…[/dim]")
+        state: dict = {}
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=None),
+            TaskProgressColumn(),
+            TimeElapsedColumn(),
+            console=console,
+            transient=True,
+        ) as progress:
+
+            def on_plan(jobs, total_bytes):
+                state["total"] = len(jobs)
+                # Weight the bar by BYTES, not by file count: transcripts range
+                # from a few KB to ~18 MB, so a per-file bar would crawl and
+                # then leap. total=1 when there is nothing to do keeps rich
+                # from dividing by zero.
+                state["task"] = progress.add_task(
+                    "starting…", total=total_bytes or 1
+                )
+
+            def on_file_start(index, job):
+                name = job.found.path.name
+                if len(name) > 28:
+                    name = name[:13] + "…" + name[-14:]
+                progress.update(
+                    state["task"],
+                    description=f"[{index}/{state['total']}] {job.found.source} {name}",
+                )
+
+            def on_progress(nbytes):
+                progress.update(state["task"], advance=nbytes)
+
+            result = collect_mod.collect(
+                conn, sources=sources, full=full, session_id=session_id,
+                on_plan=on_plan, on_file_start=on_file_start, on_progress=on_progress,
+            )
+    else:
+        result = collect_mod.collect(
+            conn, sources=sources, full=full, session_id=session_id
+        )
+
     conn.close()
 
     if quiet and not result.errors:

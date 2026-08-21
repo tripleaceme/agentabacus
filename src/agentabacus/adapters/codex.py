@@ -53,14 +53,16 @@ def _first(node: dict, keys) -> Any:
     return None
 
 
-def parse(path: Path, kind: str = "transcript", start_offset: int = 0) -> Batch:
+def parse(
+    path: Path, kind: str = "transcript", start_offset: int = 0, on_bytes=None
+) -> Batch:
     batch = Batch(byte_offset=start_offset)
     session_id = path.stem
     turns: dict[str, Turn] = {}
     model_id = None
     first_ts = last_ts = None
 
-    for record, offset in iter_lines(path, start_offset):
+    for record, offset in iter_lines(path, start_offset, on_bytes):
         batch.byte_offset = offset
         if record.get("__unparsed__"):
             batch.skipped_lines += 1

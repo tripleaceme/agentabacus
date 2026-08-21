@@ -24,7 +24,9 @@ Run `agentabacus doctor` to see models present in your own data with no pricing 
 
 ## 2. Add an adapter
 
-One module exposing `parse(path, kind, start_offset) -> Batch`, a walker in `discovery.py`, one line in `adapters/__init__.py`.
+One module exposing `parse(path, kind, start_offset, on_bytes=None) -> Batch`, a walker in `discovery.py`, one line in `adapters/__init__.py`.
+
+`on_bytes(n)` is optional — pass it straight through to `iter_lines()` and progress reporting works for free. Omit it and your files still work; they just advance the progress bar once on completion instead of continuously. That matters for large files: a single 236 MB transcript would otherwise leave the bar frozen for seconds while it appears hung.
 
 Read `adapters/claude_code.py` as the reference and `adapters/codex.py` as the minimal template.
 

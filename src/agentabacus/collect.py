@@ -50,45 +50,128 @@ def _should_read(conn, found: Found, full: bool) -> tuple[bool, int]:
     return True, offset
 
 
-def collect(
+@dataclass
+class Job:
+    """One file to parse, and how much of it is left to read."""
+
+    found: Found
+    offset: int
+    nbytes: int
+
+
+def build_plan(
     conn,
     sources: list[str] | None = None,
     full: bool = False,
     session_id: str | None = None,
-    on_file=None,
-) -> CollectResult:
-    result = CollectResult()
+) -> tuple[list[Job], int, int]:
+    """Decide all the work before doing any of it.
+
+    Planning up front is what makes an honest percentage possible: the total
+    bytes to parse are known before the first byte is read. It costs one
+    stat() per discovered file, which is nothing next to reading them, and it
+    means the progress bar can never lurch or overshoot.
+
+    Returns (jobs, files_seen, files_skipped_unchanged).
+    """
+    jobs: list[Job] = []
+    seen = skipped = 0
 
     for found in discover(sources):
         # SessionEnd hook path: collect exactly the session that just closed.
         if session_id and session_id not in found.path.name and session_id not in str(found.path):
             continue
-        result.files_seen += 1
+        seen += 1
 
         read, offset = _should_read(conn, found, full)
         if not read:
-            result.files_skipped_unchanged += 1
+            skipped += 1
             continue
-
-        parse = REGISTRY.get(found.source)
-        if parse is None:
+        if found.source not in REGISTRY:
             continue
 
         try:
-            batch = parse(found.path, found.kind, offset)
+            size = found.path.stat().st_size
+        except OSError:
+            continue
+        jobs.append(Job(found=found, offset=offset, nbytes=max(0, size - offset)))
+
+    return jobs, seen, skipped
+
+
+def collect(
+    conn,
+    sources: list[str] | None = None,
+    full: bool = False,
+    session_id: str | None = None,
+    on_plan=None,
+    on_file_start=None,
+    on_progress=None,
+) -> CollectResult:
+    """Parse everything new into the archive.
+
+    on_plan(jobs, total_bytes)  -- once, before any parsing
+    on_file_start(index, job)   -- as each file is opened, NOT when it finishes
+    on_progress(nbytes)         -- bytes consumed, roughly every megabyte
+
+    on_file_start fires on open rather than on completion so a caller shows the
+    file it is actually working on. Reporting the last-finished file instead is
+    doubly misleading: during a slow file the display names the wrong one, and
+    it names it for exactly as long as the user is wondering what is stuck.
+    """
+    result = CollectResult()
+    jobs, seen, skipped = build_plan(conn, sources, full, session_id)
+    result.files_seen = seen
+    result.files_skipped_unchanged = skipped
+
+    total_bytes = sum(j.nbytes for j in jobs)
+    if on_plan:
+        on_plan(jobs, total_bytes)
+
+    for index, job in enumerate(jobs, start=1):
+        found, offset = job.found, job.offset
+        parse = REGISTRY[found.source]
+        if on_file_start:
+            on_file_start(index, job)
+
+        # Track what the adapter reported so the tail can be topped up exactly.
+        # An adapter that ignores on_bytes reports nothing and its whole size
+        # lands in the top-up -- correct either way, just coarser.
+        reported = 0
+
+        def on_bytes(n, _state=None):
+            nonlocal reported
+            reported += n
+            if on_progress:
+                on_progress(n)
+
+        try:
+            batch = parse(found.path, found.kind, offset, on_bytes)
+        except TypeError:
+            # Adapter predates the on_bytes parameter. Still supported.
+            try:
+                batch = parse(found.path, found.kind, offset)
+            except Exception as exc:
+                result.errors.append(f"{found.path}: {type(exc).__name__}: {exc}")
+                batch = None
         except Exception as exc:  # a vendor format change must not kill the run
             result.errors.append(f"{found.path}: {type(exc).__name__}: {exc}")
-            continue
+            batch = None
 
-        counts = store.write_batch(conn, batch)
-        store.set_watermark(conn, found.path, found.source, batch.byte_offset)
+        if batch is not None:
+            counts = store.write_batch(conn, batch)
+            store.set_watermark(conn, found.path, found.source, batch.byte_offset)
 
-        result.files_read += 1
-        result.bytes_read += max(0, batch.byte_offset - offset)
-        result.malformed_lines += batch.skipped_lines
-        for key, value in counts.items():
-            result.counts[key] += value
-        if on_file:
-            on_file(found, counts)
+            result.files_read += 1
+            result.bytes_read += max(0, batch.byte_offset - offset)
+            result.malformed_lines += batch.skipped_lines
+            for key, value in counts.items():
+                result.counts[key] += value
+
+        # Top up whatever the adapter did not report, so the bar lands on 100%
+        # whether the file succeeded, failed, or reported nothing at all.
+        leftover = job.nbytes - reported
+        if on_progress and leftover > 0:
+            on_progress(leftover)
 
     return result
