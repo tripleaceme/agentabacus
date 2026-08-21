@@ -37,7 +37,16 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/agentabacus"]
 
-# The social preview PNG is 468 KB and belongs in the repo, not in a source
-# distribution -- it took the sdist from ~30 KB to 481 KB.
+# An allowlist, not an exclude list: `exclude = ["assets/"]` silently did not
+# match and the 468 KB social preview shipped anyway, taking the sdist from
+# ~30 KB to 494 KB. Naming what belongs in a source distribution fails loudly
+# if it is wrong, instead of quietly shipping whatever is lying around.
 [tool.hatch.build.targets.sdist]
-exclude = ["assets/", ".github/", "plugin/"]
+only-include = [
+    "src/agentabacus",
+    "tests",
+    "README.md",
+    "LICENSE",
+    "CONTRIBUTING.md",
+    "pyproject.toml",
+]
