@@ -125,13 +125,24 @@ agentabacus sql "SELECT * FROM turns LIMIT 10"
 | Agent       | Status          |
 | ----------- | --------------- |
 | Claude Code | ✅ Supported     |
-| Codex CLI   | Open for contribution |
+| Codex CLI   | ⚠️ Experimental — collected, excluded from totals |
 | Gemini CLI  | Open for contribution         |
 | Cursor      | Open for contribution         |
 | Aider       | Open for contribution         |
 | Cline       | Open for contribution         |
 
 More adapters are being added.
+
+**Experimental** means the adapter has never been checked against real logs from
+that tool. Its rows are collected and stored, but left out of your totals — a
+missing number prompts a question, a wrong number gets believed. `report` and
+`doctor` tell you what was found and skipped, and `--source codex` shows those
+numbers anyway.
+
+The Codex adapter currently reports implausible figures (billions of input
+tokens per session), most likely because it sums cumulative token counters
+instead of per-request usage. Fixing it needs someone with real Codex
+transcripts — see [CONTRIBUTING.md](CONTRIBUTING.md#contributing-an-adapter).
 
 ## How it works
 

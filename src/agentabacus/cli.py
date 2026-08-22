@@ -19,6 +19,7 @@ from rich.table import Table
 from . import collect as collect_mod
 from . import report as report_mod
 from . import store
+from .adapters import CONTRIBUTING_URL, EXPERIMENTAL
 from .config import DB_PATH, CONFIG_ROOTS, config_root
 from .discovery import discover
 
@@ -68,6 +69,37 @@ def _table(title: str, columns, rows, formatters) -> None:
     for row in rows:
         table.add_row(*[fmt(cell) for fmt, cell in zip(formatters, row)])
     console.print(table)
+
+
+def _experimental_note(conn) -> None:
+    """Say what was found but deliberately not counted, and how to help.
+
+    Without this the tool looks like it simply ignores Codex. Someone with 135
+    Codex files deserves to know they were seen, why their numbers are absent,
+    and what would fix it.
+    """
+    rows = report_mod.experimental_findings(conn)
+    if not rows:
+        return
+    console.print("\n[yellow][bold]Found but not included above[/bold][/yellow]")
+    for src, files, requests in rows:
+        console.print(
+            f"  [bold]{src}[/bold]  {_n(files)} file(s), {_n(requests)} request(s) "
+            f"[dim]— excluded from totals[/dim]"
+        )
+    console.print(
+        "  [dim]These adapters have not been verified against real logs from those\n"
+        "  tools yet, so their numbers are not trustworthy enough to add to your\n"
+        "  spend. Collected and stored, just not counted.[/dim]"
+    )
+    console.print("  Help make them work:")
+    # soft_wrap: let the terminal wrap the URL rather than rich breaking it
+    # mid-token, which would stop it being click-to-open.
+    console.print(f"    [underline]{CONTRIBUTING_URL}[/underline]", soft_wrap=True)
+    console.print(
+        f"  [dim]To see the raw numbers anyway: "
+        f"agentabacus report --source {rows[0][0]}[/dim]"
+    )
 
 
 def _open(read_only: bool = False):
@@ -171,13 +203,19 @@ def report(
     source: str = typer.Option(None, "--source"),
     main_only: bool = typer.Option(False, "--main-only", help="Exclude subagent threads."),
     limit: int = typer.Option(25, "--limit"),
+    experimental: bool = typer.Option(
+        False, "--experimental",
+        help="Include unverified adapters in the totals. Their numbers are not trustworthy.",
+    ),
 ):
     """Cost and token totals, with a breakdown."""
     conn = _open(read_only=True)
     include_sub = not main_only
     try:
-        row = report_mod.summary(conn, since, source, include_sub)
-        rows = report_mod.breakdown(conn, by, since, source, include_sub, limit)
+        row = report_mod.summary(conn, since, source, include_sub, experimental)
+        rows = report_mod.breakdown(
+            conn, by, since, source, include_sub, limit, experimental
+        )
     except ValueError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(2)
@@ -217,6 +255,8 @@ def report(
         rows,
         [label, _n, _tok, _tok, _tok, _usd],
     )
+    if not experimental and not source:
+        _experimental_note(conn)
 
 
 @app.command()
@@ -294,7 +334,8 @@ def doctor():
     if not found:
         console.print("  [yellow]none[/yellow]")
     for (src, kind), count in sorted(by_kind.items()):
-        console.print(f"  {src:<12} {kind:<10} {count}")
+        flag = "  [yellow](experimental)[/yellow]" if src in EXPERIMENTAL else ""
+        console.print(f"  {src:<12} {kind:<10} {count}{flag}")
 
     if not DB_PATH.exists():
         console.print(f"\n[yellow]No archive yet at {DB_PATH}. Run agentabacus collect.[/yellow]")
@@ -306,6 +347,8 @@ def doctor():
     for table in ("sessions", "turns", "tool_calls", "prompts", "_files"):
         count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         console.print(f"  {table:<12} {count:,}")
+
+    _experimental_note(conn)
 
     gaps = report_mod.unpriced_models(conn)
     if gaps:

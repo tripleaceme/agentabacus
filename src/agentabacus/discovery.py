@@ -53,9 +53,21 @@ def _claude_code(root: Path):
 
 
 def _codex(root: Path):
+    """Only `sessions/`. No fallback to the config root.
+
+    Falling back to rglob over the whole root swept up caches, temp dirs and
+    plugin test fixtures -- on the machine this was written, the single
+    "Codex transcript" found that way was
+    `~/.codex/.tmp/plugins/.../fixtures/observed-usage/responses.jsonl`,
+    a test fixture whose numbers are invented. Finding nothing is the correct
+    answer when the sessions directory is absent.
+    """
     sessions = root / "sessions"
-    base = sessions if sessions.is_dir() else root
-    for f in sorted(base.rglob("*.jsonl")):
+    if not sessions.is_dir():
+        return
+    for f in sorted(sessions.rglob("*.jsonl")):
+        if any(part.startswith(".") for part in f.relative_to(sessions).parts):
+            continue
         yield Found(f, "codex", "transcript")
 
 

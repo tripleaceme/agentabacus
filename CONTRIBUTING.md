@@ -39,9 +39,31 @@ Things that have already bitten this codebase, so check for them in yours:
 - **Torn trailing lines.** A file caught mid-write must be re-read whole next run, never half-parsed. `iter_lines()` handles this; use it.
 - **Model IDs in two forms.** Aliased and date-stamped. Normalize before joining to pricing.
 
-### Verifying the Codex adapter
+### Verifying the Codex adapter — the highest-value PR right now
 
-`adapters/codex.py` is shape-agnostic and **unverified** — it was written without access to real rollout files. If you have `~/.codex/sessions/*.jsonl`, paste two or three redacted records into a test fixture and tighten the parsing. That's the highest-value PR in the repo right now.
+`adapters/codex.py` is shape-agnostic and **unverified**: it was written without access to real rollout files, and it is currently wrong.
+
+Observed on a machine with 135 Codex transcripts:
+
+```
+4,318 requests  ·  291,007,361,482 input tokens
+```
+
+That is roughly 67 million input tokens per request, which is impossible. The likely cause is that Codex records **cumulative** token counters that grow over a session, and `_find_usage()` matches any dict with input/output token keys — so each snapshot of a running total gets counted as a fresh request. The fallback request id (`f"{session_id}:{offset}"`) makes every record unique, so the dedupe that would normally catch this never fires.
+
+This is the same class of bug the Claude Code adapter exists to avoid, arriving through a different door.
+
+Because of that, `codex` is listed in `EXPERIMENTAL` (see `adapters/__init__.py`): its rows are collected and stored, but excluded from reported totals.
+
+**To fix it**, with real `~/.codex/sessions/**/*.jsonl` files:
+
+1. Identify which field carries **per-request** usage rather than a session running total.
+2. Find the stable per-request identifier so dedupe works, and drop the offset fallback.
+3. Extract the model id — every Codex row currently lands as `(unknown)` and therefore prices at zero.
+4. Paste two or three redacted records into a fixture under `tests/`.
+5. Remove `"codex"` from `EXPERIMENTAL` and delete `test_codex_is_currently_marked_experimental`.
+
+A good sanity check: total input tokens for a session should be in the same order of magnitude as the context window times the number of requests, not thousands of times larger.
 
 ## Running things
 

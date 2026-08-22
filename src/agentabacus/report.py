@@ -10,6 +10,8 @@ from __future__ import annotations
 import re
 from datetime import datetime, timedelta, timezone
 
+from .adapters import EXPERIMENTAL
+
 _WINDOW = re.compile(r"^(\d+)\s*([dhwm])$", re.I)
 _UNITS = {"h": "hours", "d": "days", "w": "weeks", "m": "days"}
 
@@ -27,22 +29,66 @@ def cutoff(since: str | None) -> datetime | None:
     return (datetime.now(timezone.utc) - delta).replace(tzinfo=None)
 
 
-def _where(since: str | None, source: str | None, include_subagents: bool):
+def _where(
+    since: str | None,
+    source: str | None,
+    include_subagents: bool,
+    include_experimental: bool = False,
+):
     clauses, params = ["1=1"], []
     at = cutoff(since)
     if at is not None:
         clauses.append("t.ts >= ?")
         params.append(at)
     if source:
+        # An explicit --source is a deliberate request for that data, even if
+        # the adapter is experimental.
         clauses.append("t.source = ?")
         params.append(source)
+    elif not include_experimental and EXPERIMENTAL:
+        # Keep unverified adapters out of the headline numbers. See the note
+        # on EXPERIMENTAL in adapters/__init__.py.
+        marks = ",".join(["?"] * len(EXPERIMENTAL))
+        clauses.append(f"t.source NOT IN ({marks})")
+        params.extend(sorted(EXPERIMENTAL))
     if not include_subagents:
         clauses.append("t.thread_id = 'main'")
     return " AND ".join(clauses), params
 
 
-def summary(conn, since=None, source=None, include_subagents=True):
-    where, params = _where(since, source, include_subagents)
+def experimental_findings(conn) -> list[tuple]:
+    """What we found for experimental sources but are deliberately not counting.
+
+    Silence here would be the wrong behaviour: someone with 135 Codex files
+    should be told those files were seen and why their numbers are missing,
+    not left to conclude the tool ignores Codex entirely.
+    """
+    if not EXPERIMENTAL:
+        return []
+    marks = ",".join(["?"] * len(EXPERIMENTAL))
+    order = sorted(EXPERIMENTAL)
+    return conn.execute(
+        f"""
+        SELECT s.source,
+               COALESCE(f.files, 0)    AS files,
+               COALESCE(s.requests, 0) AS requests
+        FROM (
+            SELECT source, COUNT(*) AS requests FROM turns
+            WHERE source IN ({marks}) GROUP BY source
+        ) s
+        LEFT JOIN (
+            SELECT source, COUNT(*) AS files FROM _files
+            WHERE source IN ({marks}) GROUP BY source
+        ) f USING (source)
+        ORDER BY requests DESC
+        """,
+        order + order,
+    ).fetchall()
+
+
+def summary(conn, since=None, source=None, include_subagents=True,
+            include_experimental=False):
+    where, params = _where(since, source, include_subagents, include_experimental)
     return conn.execute(
         f"""
         SELECT
@@ -76,12 +122,12 @@ _DIMENSIONS = {
 
 
 def breakdown(conn, dimension="model", since=None, source=None,
-              include_subagents=True, limit=25):
+              include_subagents=True, limit=25, include_experimental=False):
     if dimension not in _DIMENSIONS:
         raise ValueError(
             f"unknown --by {dimension!r}; choose from {', '.join(sorted(_DIMENSIONS))}"
         )
-    where, params = _where(since, source, include_subagents)
+    where, params = _where(since, source, include_subagents, include_experimental)
     expr = _DIMENSIONS[dimension]
     rows = conn.execute(
         f"""
@@ -102,8 +148,9 @@ def breakdown(conn, dimension="model", since=None, source=None,
     return rows
 
 
-def top_sessions(conn, since=None, source=None, include_subagents=True, limit=10):
-    where, params = _where(since, source, include_subagents)
+def top_sessions(conn, since=None, source=None, include_subagents=True, limit=10,
+                 include_experimental=False):
+    where, params = _where(since, source, include_subagents, include_experimental)
     return conn.execute(
         f"""
         SELECT t.session_id, t.thread_id,
@@ -121,13 +168,14 @@ def top_sessions(conn, since=None, source=None, include_subagents=True, limit=10
     ).fetchall()
 
 
-def cache_report(conn, since=None, source=None, include_subagents=True):
+def cache_report(conn, since=None, source=None, include_subagents=True,
+                 include_experimental=False):
     """Cache efficiency, with the 1h/5m split kept visible.
 
     A 1-hour write costs 2x base input; a 5-minute write 1.25x. Tools that
     collapse them into one number can't show you which one you're paying for.
     """
-    where, params = _where(since, source, include_subagents)
+    where, params = _where(since, source, include_subagents, include_experimental)
     return conn.execute(
         f"""
         SELECT COALESCE(t.model_id, '(unknown)') AS model,
