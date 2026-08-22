@@ -19,8 +19,8 @@ from rich.table import Table
 from . import collect as collect_mod
 from . import report as report_mod
 from . import store
-from .adapters import CONTRIBUTING_URL, EXPERIMENTAL
-from .config import DB_PATH, CONFIG_ROOTS, config_root
+from .agents import AGENTS, BY_FLAG, CONTRIBUTING_URL, SUPPORTED, installed
+from .config import DB_PATH
 from .discovery import discover
 
 app = typer.Typer(
@@ -29,6 +29,10 @@ app = typer.Typer(
     help="Local-first analytics for AI coding agents. Reads logs already on your disk.",
 )
 console = Console()
+
+
+# Widest agent label, so the two lists in `doctor` line up with each other.
+_W = max(len(a.label) for a in AGENTS)
 
 
 def _n(value) -> str:
@@ -71,35 +75,51 @@ def _table(title: str, columns, rows, formatters) -> None:
     console.print(table)
 
 
-def _experimental_note(conn) -> None:
-    """Say what was found but deliberately not counted, and how to help.
+def _unsupported_note(prefix: str = "") -> None:
+    """Tell users which of their agents we can see but cannot read yet.
 
-    Without this the tool looks like it simply ignores Codex. Someone with 135
-    Codex files deserves to know they were seen, why their numbers are absent,
-    and what would fix it.
+    Deliberately no counts, no tokens, no cost. Someone running a tool that
+    supports one of their four agents wants to know that fact and how to fix
+    it -- not a half-number they have to work out whether to trust.
     """
-    rows = report_mod.experimental_findings(conn)
-    if not rows:
+    detected = installed(supported=False)
+    if not detected:
         return
-    console.print("\n[yellow][bold]Found but not included above[/bold][/yellow]")
-    for src, files, requests in rows:
-        console.print(
-            f"  [bold]{src}[/bold]  {_n(files)} file(s), {_n(requests)} request(s) "
-            f"[dim]— excluded from totals[/dim]"
-        )
+    names = ", ".join(agent.label for agent, _ in detected)
     console.print(
-        "  [dim]These adapters have not been verified against real logs from those\n"
-        "  tools yet, so their numbers are not trustworthy enough to add to your\n"
-        "  spend. Collected and stored, just not counted.[/dim]"
+        f"{prefix}[yellow]Also found on this machine:[/yellow] {names}"
     )
-    console.print("  Help make them work:")
+    console.print(
+        "  [dim]agentabacus has no adapter for these yet, so their logs are not\n"
+        "  collected. Adding one is a single file — contributions welcome:[/dim]"
+    )
     # soft_wrap: let the terminal wrap the URL rather than rich breaking it
     # mid-token, which would stop it being click-to-open.
-    console.print(f"    [underline]{CONTRIBUTING_URL}[/underline]", soft_wrap=True)
-    console.print(
-        f"  [dim]To see the raw numbers anyway: "
-        f"agentabacus report --source {rows[0][0]}[/dim]"
-    )
+    console.print(f"  [underline]{CONTRIBUTING_URL}[/underline]", soft_wrap=True)
+
+
+def _selected_agents(flags: dict[str, bool]) -> list[str] | None:
+    """Turn `--claude --codex` into a list of source names, or None for all.
+
+    Asking for an agent we cannot read is a hard stop with a pointer to
+    CONTRIBUTING, rather than a silent no-op that looks like "you have no data".
+    """
+    chosen = [BY_FLAG[flag] for flag, on in flags.items() if on]
+    if not chosen:
+        return None
+
+    blocked = [a for a in chosen if not a.supported]
+    if blocked:
+        for agent in blocked:
+            console.print(
+                f"[red]{agent.label} is not supported yet.[/red] "
+                f"agentabacus has no adapter for its logs."
+            )
+        console.print(f"\nAdding one is a single file:")
+        console.print(f"  [underline]{CONTRIBUTING_URL}[/underline]", soft_wrap=True)
+        raise typer.Exit(1)
+
+    return [a.name for a in chosen]
 
 
 def _open(read_only: bool = False):
@@ -114,14 +134,28 @@ def _open(read_only: bool = False):
 
 @app.command()
 def collect(
+    # One flag per known agent. With none given, every supported agent is
+    # collected; adding an agent means adding its flag here.
+    claude: bool = typer.Option(False, "--claude", help="Collect Claude Code only."),
+    codex: bool = typer.Option(False, "--codex", help="Collect Codex CLI only."),
+    gemini: bool = typer.Option(False, "--gemini", help="Collect Gemini CLI only."),
+    opencode: bool = typer.Option(False, "--opencode", help="Collect OpenCode only."),
+    cursor: bool = typer.Option(False, "--cursor", help="Collect Cursor only."),
+    cline: bool = typer.Option(False, "--cline", help="Collect Cline only."),
+    aider: bool = typer.Option(False, "--aider", help="Collect Aider only."),
     full: bool = typer.Option(False, "--full", help="Re-read every file from byte 0."),
-    source: str = typer.Option(None, "--source", help="Limit to one source, e.g. claude_code."),
     session_id: str = typer.Option(None, "--session-id", help="Collect only this session (hook mode)."),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Print nothing on success."),
 ):
-    """Read new log data into the local archive. Safe to run repeatedly."""
+    """Read new log data into the local archive. Safe to run repeatedly.
+
+    With no agent flag, collects every supported agent found on this machine.
+    """
+    sources = _selected_agents({
+        "claude": claude, "codex": codex, "gemini": gemini,
+        "opencode": opencode, "cursor": cursor, "cline": cline, "aider": aider,
+    })
     conn = store.connect()
-    sources = [source] if source else None
 
     # Progress only when a human is watching. Piped output and the SessionEnd
     # hook must stay clean -- ANSI control codes in a hook's stdout are noise
@@ -195,6 +229,9 @@ def collect(
     for err in result.errors:
         console.print(f"[red]  {err}[/red]")
 
+    if not sources:
+        _unsupported_note(prefix="\n")
+
 
 @app.command()
 def report(
@@ -203,19 +240,13 @@ def report(
     source: str = typer.Option(None, "--source"),
     main_only: bool = typer.Option(False, "--main-only", help="Exclude subagent threads."),
     limit: int = typer.Option(25, "--limit"),
-    experimental: bool = typer.Option(
-        False, "--experimental",
-        help="Include unverified adapters in the totals. Their numbers are not trustworthy.",
-    ),
 ):
     """Cost and token totals, with a breakdown."""
     conn = _open(read_only=True)
     include_sub = not main_only
     try:
-        row = report_mod.summary(conn, since, source, include_sub, experimental)
-        rows = report_mod.breakdown(
-            conn, by, since, source, include_sub, limit, experimental
-        )
+        row = report_mod.summary(conn, since, source, include_sub)
+        rows = report_mod.breakdown(conn, by, since, source, include_sub, limit)
     except ValueError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(2)
@@ -255,8 +286,8 @@ def report(
         rows,
         [label, _n, _tok, _tok, _tok, _usd],
     )
-    if not experimental and not source:
-        _experimental_note(conn)
+    if not source:
+        _unsupported_note(prefix="\n")
 
 
 @app.command()
@@ -320,22 +351,49 @@ def tools(
 @app.command()
 def doctor():
     """What's discoverable, what's collected, and what has no price."""
-    console.print("\n[bold]Config roots[/bold]")
-    for name, (env_var, default) in CONFIG_ROOTS.items():
-        root = config_root(name)
-        state = f"[green]{root}[/green]" if root else f"[dim]not found ({default})[/dim]"
-        console.print(f"  {name:<12} {state}   [dim]override: ${env_var}[/dim]")
-
     found = discover()
     by_kind: dict[tuple[str, str], int] = {}
     for f in found:
         by_kind[(f.source, f.kind)] = by_kind.get((f.source, f.kind), 0) + 1
-    console.print("\n[bold]Discovered files[/bold]")
-    if not found:
-        console.print("  [yellow]none[/yellow]")
-    for (src, kind), count in sorted(by_kind.items()):
-        flag = "  [yellow](experimental)[/yellow]" if src in EXPERIMENTAL else ""
-        console.print(f"  {src:<12} {kind:<10} {count}{flag}")
+
+    console.print("\n[bold]Supported agents[/bold]")
+    any_supported = False
+    for agent in SUPPORTED:
+        root = agent.root()
+        if root is None:
+            continue
+        any_supported = True
+        total = sum(n for (src, _), n in by_kind.items() if src == agent.name)
+        console.print(
+            f"  [green]{agent.label:<{_W}}[/green]  {_n(total):>5} log file(s)  "
+            f"[dim]{root}[/dim]"
+        )
+        for (src, kind), count in sorted(by_kind.items()):
+            if src == agent.name:
+                console.print(f"      [dim]{kind:<11}{count}[/dim]")
+    if not any_supported:
+        console.print("  [yellow]none found on this machine[/yellow]")
+
+    # Detected but unreadable. No counts here on purpose -- what the user needs
+    # is the fact and the fix, not a number they cannot act on.
+    detected = installed(supported=False)
+    if detected:
+        console.print("\n[bold]Detected, not supported yet[/bold]")
+        for agent, root in detected:
+            console.print(f"  [yellow]{agent.label:<{_W}}[/yellow]  [dim]{root}[/dim]")
+        console.print(
+            "\n  [dim]These agents keep logs on this machine, but agentabacus has no\n"
+            "  adapter for them yet, so nothing from them is collected.\n"
+            "  Adding an adapter is a single file:[/dim]"
+        )
+        console.print(f"  [underline]{CONTRIBUTING_URL}[/underline]", soft_wrap=True)
+
+    missing = [
+        a.label for a in AGENTS
+        if a.root() is None and not a.supported
+    ]
+    if missing:
+        console.print(f"\n[dim]Not installed: {', '.join(missing)}[/dim]")
 
     if not DB_PATH.exists():
         console.print(f"\n[yellow]No archive yet at {DB_PATH}. Run agentabacus collect.[/yellow]")
@@ -347,8 +405,6 @@ def doctor():
     for table in ("sessions", "turns", "tool_calls", "prompts", "_files"):
         count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         console.print(f"  {table:<12} {count:,}")
-
-    _experimental_note(conn)
 
     gaps = report_mod.unpriced_models(conn)
     if gaps:

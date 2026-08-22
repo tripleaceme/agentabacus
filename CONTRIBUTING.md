@@ -28,7 +28,7 @@ One module exposing `parse(path, kind, start_offset, on_bytes=None) -> Batch`, a
 
 `on_bytes(n)` is optional — pass it straight through to `iter_lines()` and progress reporting works for free. Omit it and your files still work; they just advance the progress bar once on completion instead of continuously. That matters for large files: a single 236 MB transcript would otherwise leave the bar frozen for seconds while it appears hung.
 
-Read `adapters/claude_code.py` as the reference and `adapters/codex.py` as the minimal template.
+Read `adapters/claude_code.py` as the reference — it is the only adapter, and it documents every trap found so far.
 
 **The one rule: be a tolerant parser.** These log formats are undocumented, version-dependent, and change without notice. Route on known shapes, count what you skip, and never raise — a vendor's routine release must not become a crash for every user. Strictness belongs in `schema.py`, not at the edges.
 
@@ -39,31 +39,36 @@ Things that have already bitten this codebase, so check for them in yours:
 - **Torn trailing lines.** A file caught mid-write must be re-read whole next run, never half-parsed. `iter_lines()` handles this; use it.
 - **Model IDs in two forms.** Aliased and date-stamped. Normalize before joining to pricing.
 
-### Verifying the Codex adapter — the highest-value PR right now
+### Wiring up a new agent
 
-`adapters/codex.py` is shape-agnostic and **unverified**: it was written without access to real rollout files, and it is currently wrong.
+Four steps, and step 4 is one line:
 
-Observed on a machine with 135 Codex transcripts:
+1. **`agents.py`** — the agent is probably already listed with `supported=False`. If not, add it: name, flag, label, env var, and the default paths its data lives in.
+2. **`adapters/<name>.py`** — the parser. `adapters/claude_code.py` is the reference.
+3. **`discovery.py`** — a walker that yields the log files, and an entry in `_WALKERS`.
+4. **`adapters/__init__.py`** — register the parser, then flip `supported=True` in `agents.py` and add a `--<flag>` option to `collect` in `cli.py`.
 
-```
-4,318 requests  ·  291,007,361,482 input tokens
-```
+Until step 4, users with that agent still see it: `doctor` reports the logs exist and links here. Nothing is parsed or stored until the adapter is real.
 
-That is roughly 67 million input tokens per request, which is impossible. The likely cause is that Codex records **cumulative** token counters that grow over a session, and `_find_usage()` matches any dict with input/output token keys — so each snapshot of a running total gets counted as a fresh request. The fallback request id (`f"{session_id}:{offset}"`) makes every record unique, so the dedupe that would normally catch this never fires.
+### A note on the Codex adapter
 
-This is the same class of bug the Claude Code adapter exists to avoid, arriving through a different door.
+An early draft of a Codex adapter shipped in 0.1.x and was removed in 0.2.0. It reported **4,318 requests carrying 291,007,361,482 input tokens** — about 67 million per request, which is impossible. Two things went wrong, and they are worth knowing before writing a replacement:
 
-Because of that, `codex` is listed in `EXPERIMENTAL` (see `adapters/__init__.py`): its rows are collected and stored, but excluded from reported totals.
+- It appeared to sum **cumulative** token counters. Codex records running session totals; a parser that matches any dict with input/output token keys counts each snapshot of a growing total as a fresh request.
+- Its fallback request id (`f"{session_id}:{offset}"`) made every record unique, so the dedupe that would have caught this never fired.
 
-**To fix it**, with real `~/.codex/sessions/**/*.jsonl` files:
+A good sanity check for any new adapter: a session's total input tokens should be in the same order of magnitude as context window × requests, not thousands of times larger.
 
-1. Identify which field carries **per-request** usage rather than a session running total.
-2. Find the stable per-request identifier so dedupe works, and drop the offset fallback.
-3. Extract the model id — every Codex row currently lands as `(unknown)` and therefore prices at zero.
-4. Paste two or three redacted records into a fixture under `tests/`.
-5. Remove `"codex"` from `EXPERIMENTAL` and delete `test_codex_is_currently_marked_experimental`.
+### Before you mark it supported
 
-A good sanity check: total input tokens for a session should be in the same order of magnitude as the context window times the number of requests, not thousands of times larger.
+Check all four against real logs, not against what the format looks like it should be:
+
+1. **Which field is per-request usage**, as opposed to a session running total. Getting this wrong inflates totals by orders of magnitude.
+2. **The stable per-request identifier**, so dedupe actually fires. If you find yourself synthesising an id from a file offset, every record becomes unique and dedupe silently stops working.
+3. **The model id**, or every row prices at zero.
+4. **Paste two or three redacted records into a fixture** under `tests/` so the format is pinned and a future change to it fails loudly.
+
+Then register the adapter, set `supported=True`, and add the `collect` flag.
 
 ## Running things
 

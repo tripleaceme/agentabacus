@@ -49,6 +49,14 @@ agentabacus collect
 
 Collection is incremental, so you can safely run it again as new sessions are created.
 
+To collect from one agent only, name it:
+
+```bash
+agentabacus collect --claude
+```
+
+With no agent flag, `collect` reads every supported agent found on your machine.
+
 ## Reports
 
 Get a cost and usage report:
@@ -122,27 +130,39 @@ agentabacus sql "SELECT * FROM turns LIMIT 10"
 
 ## Supported agents
 
-| Agent       | Status          |
-| ----------- | --------------- |
-| Claude Code | ✅ Supported     |
-| Codex CLI   | ⚠️ Experimental — collected, excluded from totals |
-| Gemini CLI  | Open for contribution         |
-| Cursor      | Open for contribution         |
-| Aider       | Open for contribution         |
-| Cline       | Open for contribution         |
+| Agent       | Status                |
+| ----------- | --------------------- |
+| Claude Code | ✅ Supported           |
+| Codex CLI   | Open for contribution |
+| Gemini CLI  | Open for contribution |
+| OpenCode    | Open for contribution |
+| Cursor      | Open for contribution |
+| Cline       | Open for contribution |
+| Aider       | Open for contribution |
 
-More adapters are being added.
+`agentabacus doctor` detects every agent on this list that is installed on your
+machine, whether or not it is supported yet:
 
-**Experimental** means the adapter has never been checked against real logs from
-that tool. Its rows are collected and stored, but left out of your totals — a
-missing number prompts a question, a wrong number gets believed. `report` and
-`doctor` tell you what was found and skipped, and `--source codex` shows those
-numbers anyway.
+```text
+Supported agents
+  Claude Code    163 log file(s)  /Users/you/.claude
 
-The Codex adapter currently reports implausible figures (billions of input
-tokens per session), most likely because it sums cumulative token counters
-instead of per-request usage. Fixing it needs someone with real Codex
-transcripts — see [CONTRIBUTING.md](CONTRIBUTING.md#contributing-an-adapter).
+Detected, not supported yet
+  Codex CLI      /Users/you/.codex
+  Gemini CLI     /Users/you/.gemini
+
+  These agents keep logs on this machine, but agentabacus has no
+  adapter for them yet, so nothing from them is collected.
+  Adding an adapter is a single file:
+  https://github.com/tripleaceme/agentabacus/blob/main/CONTRIBUTING.md
+```
+
+Nothing from an unsupported agent is ever parsed, stored, or counted. An adapter
+is either finished and trusted or it is not there — there is no half-supported
+state producing numbers you would have to decide whether to believe.
+
+If one of these is yours, [adding it](CONTRIBUTING.md#contributing-an-adapter) is
+a single file.
 
 ## How it works
 

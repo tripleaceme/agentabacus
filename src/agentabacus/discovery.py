@@ -1,18 +1,25 @@
 """Finding the transcripts.
 
-The non-obvious part: subagent transcripts live in their OWN files, one level
-deeper than the main transcript --
+Only agents with an adapter are walked here. An agent we cannot parse is
+detected in `agents.py` and reported by `doctor`; it is never read, parsed or
+stored, so there is no way for a half-understood log format to end up
+contributing numbers to anyone's spend.
 
-    ~/.claude/projects/<slug>/<session-uuid>.jsonl              <- main
-    ~/.claude/projects/<slug>/<session-uuid>/subagents/*.jsonl  <- subagents
+The non-obvious part of the Claude Code layout: subagent transcripts live in
+their OWN files, one and sometimes two levels deeper than the main transcript --
 
-A `projects/*/*.jsonl` glob (the obvious one, and the one most tools use) misses
-every subagent file. On a machine that uses agent fan-out those outnumber the
-main transcripts several to one.
+    ~/.claude/projects/<slug>/<uuid>.jsonl                            main
+    ~/.claude/projects/<slug>/<uuid>/subagents/agent-*.jsonl          subagent
+    ~/.claude/projects/<slug>/<uuid>/subagents/workflows/wf_*/...     workflow subagent
+
+A `projects/*/*.jsonl` glob misses every subagent file, and a
+`*/subagents/*.jsonl` glob still misses the workflow ones a level deeper --
+which on a machine that runs workflows are the majority (measured: 80 of 127).
+Discovery has to recurse.
 
 The slug is the working directory with '/' replaced by '-'. That encoding is
-lossy and NOT reversible: `-Users-mac-Documents-BrainStorm-Projects-atlas` could
-decode to '.../BrainStorm Projects/atlas' or '.../BrainStorm-Projects-atlas'.
+lossy and NOT reversible: `-Users-mac-Documents-BrainStorm-Projects-atlas`
+could decode to '.../BrainStorm Projects/atlas' or '.../BrainStorm-Projects-atlas'.
 Never reverse it -- read `cwd` from inside the JSONL, where it is verbatim.
 """
 
@@ -21,7 +28,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .config import config_root
+from .agents import BY_NAME, SUPPORTED
 
 
 @dataclass(frozen=True)
@@ -39,12 +46,6 @@ def _claude_code(root: Path):
                 continue
             for f in sorted(slug_dir.glob("*.jsonl")):
                 yield Found(f, "claude_code", "transcript")
-            # Subagents live under the session's sidecar dir -- but at TWO
-            # depths, so this must recurse rather than glob a fixed shape:
-            #   <uuid>/subagents/agent-*.jsonl                      plain subagent
-            #   <uuid>/subagents/workflows/wf_*/agent-*.jsonl       workflow subagent
-            # The nested form is the majority on a machine that runs workflows;
-            # a `*/subagents/*.jsonl` glob silently drops all of them.
             for f in sorted(slug_dir.glob("*/subagents/**/*.jsonl")):
                 yield Found(f, "claude_code", "subagent")
     history = root / "history.jsonl"
@@ -52,36 +53,26 @@ def _claude_code(root: Path):
         yield Found(history, "claude_code", "history")
 
 
-def _codex(root: Path):
-    """Only `sessions/`. No fallback to the config root.
-
-    Falling back to rglob over the whole root swept up caches, temp dirs and
-    plugin test fixtures -- on the machine this was written, the single
-    "Codex transcript" found that way was
-    `~/.codex/.tmp/plugins/.../fixtures/observed-usage/responses.jsonl`,
-    a test fixture whose numbers are invented. Finding nothing is the correct
-    answer when the sessions directory is absent.
-    """
-    sessions = root / "sessions"
-    if not sessions.is_dir():
-        return
-    for f in sorted(sessions.rglob("*.jsonl")):
-        if any(part.startswith(".") for part in f.relative_to(sessions).parts):
-            continue
-        yield Found(f, "codex", "transcript")
-
-
-_WALKERS = {"claude_code": _claude_code, "codex": _codex}
+# One walker per supported agent. Adding an agent means adding an adapter,
+# a walker here, and flipping `supported` in agents.py.
+_WALKERS = {"claude_code": _claude_code}
 
 
 def discover(sources: list[str] | None = None) -> list[Found]:
-    """Every log file agentabacus knows how to read, on this machine, right now."""
+    """Every log file agentabacus can actually read, on this machine, now."""
     out: list[Found] = []
-    for source, walker in _WALKERS.items():
-        if sources and source not in sources:
+    for agent in SUPPORTED:
+        if sources and agent.name not in sources:
             continue
-        root = config_root(source)
-        if root is None:
+        walker = _WALKERS.get(agent.name)
+        root = agent.root()
+        if walker is None or root is None:
             continue
         out.extend(walker(root))
     return out
+
+
+def config_root(name: str) -> Path | None:
+    """Kept for callers that just want one agent's root by name."""
+    agent = BY_NAME.get(name)
+    return agent.root() if agent else None

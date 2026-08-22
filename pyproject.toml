@@ -1,6 +1,6 @@
 [project]
 name = "agentabacus"
-version = "0.1.3"
+version = "0.2.0"
 description = "Local-first analytics for AI coding agents. Reads the session logs already on your disk."
 readme = "README.md"
 requires-python = ">=3.10"

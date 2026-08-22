@@ -1,40 +1,21 @@
 """Adapter registry.
 
-Adding support for a new agent CLI is: write a module exposing
-`parse(path, kind, start_offset) -> Batch`, add a walker in discovery.py, and
-register it here. Nothing else in the codebase needs to change.
+One entry per agent we can actually parse. Adding support for a new agent CLI
+is: write a module exposing `parse(path, kind, start_offset, on_bytes=None)
+-> Batch`, add a walker in discovery.py, register it here, and flip
+`supported=True` in agents.py.
+
+There is deliberately no half-way state. An adapter is either finished and
+trusted, or it is not here at all -- `doctor` will still tell users their logs
+were spotted and point them at CONTRIBUTING.
 """
 
 from __future__ import annotations
 
-from . import claude_code, codex
+from . import claude_code
 
 REGISTRY = {
     claude_code.SOURCE: claude_code.parse,
-    codex.SOURCE: codex.parse,
 }
 
-# Adapters that have never been verified against real files from that tool.
-#
-# Their rows are still collected and stored -- so that fixing the adapter and
-# re-running `collect --full` recovers the history -- but they are EXCLUDED
-# from headline totals. An unverified adapter that quietly contributes to a
-# cost figure is worse than one that reports nothing: a missing number prompts
-# a question, a wrong number gets believed.
-#
-# This is not hypothetical. The Codex adapter reported 4,318 requests carrying
-# 291 billion input tokens, roughly 67 million tokens per request. It appears
-# to be summing cumulative token counters rather than per-request usage --
-# the same class of bug as the per-line overcount the Claude Code adapter
-# exists to avoid.
-#
-# Remove a source from this set only once someone has checked its output
-# against real transcripts. See CONTRIBUTING.md.
-EXPERIMENTAL = {"codex"}
-
-CONTRIBUTING_URL = (
-    "https://github.com/tripleaceme/agentabacus/blob/main/CONTRIBUTING.md"
-    "#contributing-an-adapter"
-)
-
-__all__ = ["REGISTRY", "EXPERIMENTAL", "CONTRIBUTING_URL", "claude_code", "codex"]
+__all__ = ["REGISTRY", "claude_code"]

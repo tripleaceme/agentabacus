@@ -24,6 +24,7 @@ from pathlib import Path
 import duckdb
 
 from . import pricing
+from .agents import SUPPORTED_NAMES
 from .config import DB_PATH, ensure_home
 from .schema import DDL, SCHEMA_VERSION, VIEWS, Batch
 
@@ -39,9 +40,32 @@ def connect(db_path: Path | None = None, read_only: bool = False):
     return conn
 
 
+def _drop_unsupported(conn) -> int:
+    """Remove rows from agents that no longer have an adapter.
+
+    Earlier versions shipped an unfinished Codex adapter whose numbers were
+    wrong by orders of magnitude. Anyone who ran those versions has that data
+    in their archive, and it would keep skewing their totals forever. Dropping
+    it on open means an upgrade repairs the archive without the user needing
+    to know anything happened.
+    """
+    if not SUPPORTED_NAMES:
+        return 0
+    marks = ",".join(["?"] * len(SUPPORTED_NAMES))
+    names = sorted(SUPPORTED_NAMES)
+    removed = 0
+    for table in ("turns", "tool_calls", "prompts", "sessions", "_files"):
+        cursor = conn.execute(
+            f"DELETE FROM {table} WHERE source NOT IN ({marks})", names
+        )
+        removed += cursor.fetchall()[0][0] if cursor.description else 0
+    return removed
+
+
 def init(conn) -> None:
     conn.execute(DDL)
     conn.execute(VIEWS)
+    _drop_unsupported(conn)
     pricing.sync(conn)
     conn.execute(
         "INSERT INTO _meta VALUES ('schema_version', ?) "
