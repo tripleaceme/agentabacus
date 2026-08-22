@@ -31,8 +31,35 @@ def test_only_agents_with_adapters_are_marked_supported():
             assert agent.name not in REGISTRY, f"{agent.name} has an adapter, mark it supported"
 
 
-def test_claude_code_is_the_supported_one_today():
-    assert [a.name for a in agents.SUPPORTED] == ["claude_code"]
+def test_every_supported_agent_has_a_discovery_walker():
+    """Marking an agent supported takes four edits, and forgetting this one
+    fails silently: the adapter is registered, `collect --x` runs, exits 0,
+    and reports "0 file(s) read" because discovery never looks for its logs.
+    A successful-looking run that collects nothing is the worst outcome, so
+    it is caught here rather than by a confused user.
+    """
+    from agentabacus.discovery import _WALKERS
+
+    for agent in agents.SUPPORTED:
+        assert agent.name in _WALKERS, (
+            f"{agent.name} is supported and has an adapter, but no walker in "
+            f"discovery._WALKERS -- collect would find none of its files"
+        )
+
+
+def test_collect_has_a_flag_for_every_known_agent():
+    """`collect --gemini` must exist the moment Gemini appears in agents.py,
+    even while unsupported -- that is what makes the error message possible
+    instead of typer reporting an unknown option."""
+    import inspect
+
+    from agentabacus.cli import collect
+
+    params = inspect.signature(collect).parameters
+    for agent in agents.AGENTS:
+        assert agent.flag in params, (
+            f"agents.py lists {agent.name} but `collect` has no --{agent.flag} flag"
+        )
 
 
 def test_every_agent_has_a_unique_flag():
