@@ -1,0 +1,80 @@
+name: pr
+
+# Everything a maintainer would otherwise check by hand, run before review.
+# The goal is that approving a PR is a judgement call about intent, never a
+# hunt for whether the code works.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  adapter-contract:
+    name: Adapter contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v5
+      - run: uv pip install --system -e ".[dev]"
+
+      # Runs against every registered adapter, including the one in this PR.
+      # Rejects: cumulative counters read as per-request usage, request ids
+      # built from byte offsets, missing model ids, unparsed timestamps,
+      # non-idempotent parsing, and adapters with no fixtures.
+      - name: Validate adapters against their fixtures
+        run: python scripts/validate_adapters.py
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: adapter-report
+          path: adapter-report.md
+
+  review-guide:
+    name: Review guide
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Classify the diff
+        id: guide
+        run: |
+          python scripts/pr_review_report.py \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}"
+
+      # Fork PRs get a read-only token, so a failed comment must not fail the
+      # run -- the same report is always in the job summary either way.
+      - name: Comment on the PR
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            cat review-report.md
+            echo
+            echo "---"
+            echo "_Adapter contract results are in the \`Adapter contract\` check._"
+          } > comment.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file comment.md
+
+      - name: Flag PRs that change shared behaviour
+        if: steps.guide.outputs.needs_human_review == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr edit "${{ github.event.pull_request.number }}" \
+            --add-label "touches-shared-code" || true

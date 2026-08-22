@@ -1,6 +1,6 @@
 [project]
 name = "agentabacus"
-version = "0.2.0"
+dynamic = ["version"]
 description = "Local-first analytics for AI coding agents. Reads the session logs already on your disk."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -31,8 +31,16 @@ Issues = "https://github.com/tripleaceme/agentabacus/issues"
 agentabacus = "agentabacus.cli:app"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+# The version IS the git tag. Nothing to bump by hand, and nothing committed
+# back to main, so the release job never pushes to a protected branch.
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/agentabacus/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agentabacus"]

@@ -85,3 +85,38 @@ agentabacus doctor              # what's discoverable on your machine
 - No agent that acts on the data.
 
 Team/warehouse sinks and a dbt package are on the roadmap, not in scope yet.
+
+## What runs automatically
+
+You do not need to ask for a review checklist — opening a PR runs it:
+
+| Check | What it rejects |
+| --- | --- |
+| Test suite | Linux + macOS, Python 3.10 and 3.13 |
+| Adapter contract | Cumulative counters read as per-request usage, request ids built from byte offsets, missing model ids, unparsed timestamps, non-idempotent parsing, adapters with no fixtures |
+| Pricing table | Bad columns, dates, duplicates, negative rates |
+| Review guide | Comments on the PR saying whether it touches shared code or an already-working adapter |
+
+Run the same checks locally before pushing:
+
+```bash
+python -m pytest
+python scripts/validate_adapters.py
+```
+
+The one thing CI cannot do is confirm the adapter read *your* logs correctly, which is why the PR template asks for your real `agentabacus report` output. That output is what gets a PR merged.
+
+## Releases
+
+Merging to `main` publishes to PyPI. Nobody tags anything by hand.
+
+The version comes from the git tag via `hatch-vcs`, and the size of the bump comes from the PR title:
+
+| PR title | Result |
+| --- | --- |
+| `feat: add gemini adapter` | minor — `0.2.0` → `0.3.0` |
+| `fix: handle empty transcripts` | patch — `0.2.0` → `0.2.1` |
+| `feat!: drop python 3.9` | breaking — minor while pre-1.0, major after |
+| anything with `[skip release]` | merges without publishing |
+
+Merges that change nothing under `src/` do not cut a release.

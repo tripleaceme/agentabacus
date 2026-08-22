@@ -15,3 +15,4 @@ agentabacus_export/
 assets/*
 !assets/social-preview.png
 !assets/social-preview.html
+src/agentabacus/_version.py
