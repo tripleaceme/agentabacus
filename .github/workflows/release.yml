@@ -31,6 +31,11 @@ on:
         default: ""
         type: choice
         options: ["", "patch", "minor", "major"]
+      version:
+        description: "Publish this exact version instead (e.g. 1.0.0). Overrides bump."
+        required: false
+        default: ""
+        type: string
 
 concurrency:
   group: release
@@ -71,6 +76,24 @@ jobs:
       - name: Compute the next version
         id: next
         run: |
+          # An explicit version is the escape hatch for things the bump rules
+          # cannot express, such as declaring 1.0.0.
+          if [ -n "${{ inputs.version }}" ]; then
+            V="${{ inputs.version }}"
+            if ! echo "$V" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "::error::version must look like 1.0.0, got '$V'"
+              exit 1
+            fi
+            if git rev-parse "v$V" >/dev/null 2>&1; then
+              echo "::error::tag v$V already exists"
+              exit 1
+            fi
+            {
+              echo "version=$V"
+              echo "publish=true"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [ "${{ steps.paths.outputs.ship }}" != "true" ] && [ -z "${{ inputs.bump }}" ]; then
             echo "publish=false" >> "$GITHUB_OUTPUT"
             exit 0

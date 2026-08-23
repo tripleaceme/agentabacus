@@ -49,7 +49,7 @@ agentabacus collect
 
 Collection is incremental, so you can safely run it again as new sessions are created.
 
-To collect from one agent only, name it:
+To collect from one agent only, use:
 
 ```bash
 agentabacus collect --claude
@@ -104,7 +104,7 @@ Reads new log data into the archive. Incremental and safe to re-run — unchange
 | *(no flag)* | Collect every supported agent found on this machine. |
 | `--claude` | Collect Claude Code only. |
 | `--codex`, `--gemini`, `--opencode`, `--cursor`, `--cline`, `--aider` | Collect that agent only. Unsupported ones exit with a link to the contributing guide. |
-| `--full` | Ignore saved read positions and re-read every log from the start. Use after upgrading, or if numbers look wrong. |
+| `--full` | Ignore saved read positions and re-read every log from the start. Use only after upgrading, or if numbers look wrong. |
 | `--session-id <id>` | Collect a single session. Used by the Claude Code `SessionEnd` hook. |
 | `--quiet`, `-q` | Print nothing unless something failed. Also disables the progress bar. |
 
@@ -166,6 +166,32 @@ Tool-call volume and error rate — the effectiveness side rather than the cost 
 | `--since`, `--source`, `--main-only` | See shared options. |
 | `--limit <n>` | How many tools to list. Default `20`. |
 
+### `agentabacus schedule`
+
+Collect automatically in the background, on an interval you choose. Uses your operating system's own scheduler — there is no agentabacus daemon.
+
+| Option | What it does |
+| --- | --- |
+| *(no option)* | Show whether auto-collection is on, and how often it runs. |
+| `--every <interval>` | Turn it on and run this often: `30m`, `2h`, `6h`, `1d`. Minimum `5m`, maximum `7d`. |
+| `--off` | Remove the schedule. |
+
+```bash
+agentabacus schedule --every 6h    # collect every 6 hours
+agentabacus schedule               # is it on?
+agentabacus schedule --off         # stop
+```
+
+| Platform | What gets created |
+| --- | --- |
+| macOS | `~/Library/LaunchAgents/tech.agentabacus.collect.plist` |
+| Linux | `~/.config/systemd/user/agentabacus-collect.timer` |
+| Windows | A Task Scheduler task named `agentabacus collect` |
+
+Output goes to `~/.agentabacus/collect.log`. Collection is incremental, so a long interval costs nothing and loses nothing — `6h` is a good default.
+
+This complements the Claude Code plugin rather than replacing it. The `SessionEnd` hook archives a session the moment it closes; the schedule also catches sessions that never exited cleanly, and every agent that has no hook at all.
+
 ### `agentabacus doctor`
 
 Which agents are on this machine, what has been collected, and any model in your data with no pricing row. Takes no options.
@@ -221,16 +247,10 @@ Detected, not supported yet
 
   These agents keep logs on this machine, but agentabacus has no
   adapter for them yet, so nothing from them is collected.
-  Adding an adapter is a single file:
-  https://github.com/tripleaceme/agentabacus/blob/main/CONTRIBUTING.md
+  You can contribute by [adding it](CONTRIBUTING.md#contributing-an-adapter)
 ```
 
-Nothing from an unsupported agent is ever parsed, stored, or counted. An adapter
-is either finished and trusted or it is not there — there is no half-supported
-state producing numbers you would have to decide whether to believe.
 
-If one of these is yours, [adding it](CONTRIBUTING.md#contributing-an-adapter) is
-a single file.
 
 ## How it works
 
@@ -295,6 +315,12 @@ pipx install agentabacus
 ```
 
 No daemon or cron job is required.
+
+For agents with no hook, or to catch sessions that never closed cleanly, add a schedule as well:
+
+```bash
+agentabacus schedule --every 6h
+```
 
 ## For contributors
 

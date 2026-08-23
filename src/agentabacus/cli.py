@@ -19,6 +19,7 @@ from rich.table import Table
 
 from . import collect as collect_mod
 from . import report as report_mod
+from . import schedule as schedule_mod
 from . import store
 from .agents import AGENTS, BY_FLAG, CONTRIBUTING_URL, SUPPORTED, installed
 from .config import DB_PATH
@@ -427,6 +428,78 @@ def tools(
         rows,
         [str, _n, _n, _n, _pct, _n],
     )
+
+
+@app.command(epilog="""[bold]Examples[/bold]
+
+  agentabacus schedule                  show whether auto-collection is on
+  agentabacus schedule --every 6h       collect every 6 hours
+  agentabacus schedule --every 30m      every 30 minutes
+  agentabacus schedule --every 1d       once a day
+  agentabacus schedule --off            turn it off
+
+Uses your operating system's own scheduler -- launchd on macOS, a systemd user
+timer on Linux, Task Scheduler on Windows. There is no agentabacus daemon.
+""")
+def schedule(
+    every: str = typer.Option(
+        None, "--every",
+        help="Run collection this often: 30m, 2h, 6h, 1d. Minimum 5m, maximum 7d.",
+    ),
+    off: bool = typer.Option(False, "--off", help="Remove the schedule."),
+):
+    """Collect automatically in the background, on a schedule you choose.
+
+    With no options, reports the current schedule.
+    """
+    try:
+        if off:
+            removed = schedule_mod.uninstall()
+            console.print(
+                "[green]Auto-collection turned off.[/green]" if removed
+                else "[yellow]Auto-collection was not set up.[/yellow]"
+            )
+            raise typer.Exit(0)
+
+        if every:
+            minutes = schedule_mod.parse_interval(every)
+            where = schedule_mod.install(minutes)
+            console.print(
+                f"[green]Auto-collection on:[/green] "
+                f"{schedule_mod.humanise(minutes)}  "
+                f"[dim]({schedule_mod.backend()})[/dim]"
+            )
+            console.print(f"  [dim]{where}[/dim]")
+            console.print(f"  [dim]log: {schedule_mod.log_path()}[/dim]")
+            console.print("\n[dim]Turn it off with [bold]agentabacus schedule --off[/bold][/dim]")
+            raise typer.Exit(0)
+
+        state = schedule_mod.status()
+        if not state.installed:
+            console.print("[yellow]Auto-collection is off.[/yellow]")
+            console.print(
+                "\n[dim]Turn it on, e.g.:[/dim]  agentabacus schedule --every 6h"
+            )
+            console.print(
+                "[dim]Collection is incremental, so a long interval costs nothing"
+                " and loses nothing.[/dim]"
+            )
+            raise typer.Exit(0)
+
+        cadence = (
+            schedule_mod.humanise(state.minutes) if state.minutes else "on a schedule"
+        )
+        console.print(
+            f"[green]Auto-collection is on:[/green] {cadence}  "
+            f"[dim]({schedule_mod.backend()}, {state.detail})[/dim]"
+        )
+        console.print(f"  [dim]{state.path}[/dim]")
+        log = schedule_mod.log_path()
+        if log.exists() and log.stat().st_size:
+            console.print(f"  [dim]log: {log}[/dim]")
+    except schedule_mod.ScheduleError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2)
 
 
 @app.command()
