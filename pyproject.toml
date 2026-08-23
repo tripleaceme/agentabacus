@@ -28,7 +28,7 @@ Homepage = "https://github.com/tripleaceme/agentabacus"
 Issues = "https://github.com/tripleaceme/agentabacus/issues"
 
 [project.scripts]
-agentabacus = "agentabacus.cli:app"
+agentabacus = "agentabacus.cli:main"
 
 [build-system]
 requires = ["hatchling", "hatch-vcs"]

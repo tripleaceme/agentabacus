@@ -77,56 +77,124 @@ Group the results:
 agentabacus report --by model
 ```
 
-Available groupings include:
-
-```text
-source
-project
-branch
-model
-day
-effort
-speed
-thread
-```
-
 For example, `--by thread` separates your main agent from its subagents.
+Every grouping is listed in the [command reference](#agentabacus-report) below.
 
-## Other commands
+## Command reference
 
-### Find expensive sessions
+Every command also takes `--help`, e.g. `agentabacus report --help`.
+
+### Shared options
+
+These mean the same thing wherever they appear.
+
+| Option | What it does |
+| --- | --- |
+| `--since <window>` | Time window counting back from now: `24h`, `7d`, `4w`, `6m`, or `all`. Default `30d`. There is no upper limit — `all` covers everything you have collected. |
+| `--source <agent>` | Restrict to one agent, e.g. `claude_code`. Default is every agent in the archive. |
+| `--main-only` | Exclude subagent threads, counting only your main conversation. |
+| `--limit <n>` | How many rows to show. |
+
+### `agentabacus collect`
+
+Reads new log data into the archive. Incremental and safe to re-run — unchanged files cost one `stat()`.
+
+| Option | What it does |
+| --- | --- |
+| *(no flag)* | Collect every supported agent found on this machine. |
+| `--claude` | Collect Claude Code only. |
+| `--codex`, `--gemini`, `--opencode`, `--cursor`, `--cline`, `--aider` | Collect that agent only. Unsupported ones exit with a link to the contributing guide. |
+| `--full` | Ignore saved read positions and re-read every log from the start. Use after upgrading, or if numbers look wrong. |
+| `--session-id <id>` | Collect a single session. Used by the Claude Code `SessionEnd` hook. |
+| `--quiet`, `-q` | Print nothing unless something failed. Also disables the progress bar. |
+
+### `agentabacus report`
+
+Cost and token totals, with a breakdown.
+
+| Option | What it does |
+| --- | --- |
+| `--since <window>` | Time window. Default `30d`. |
+| `--by <dimension>` | Group the breakdown. Default `model`. |
+| `--source`, `--main-only`, `--limit` | See shared options. |
+
+`--by` accepts:
+
+| Value | Groups by |
+| --- | --- |
+| `model` | Which model did the work — where the money goes. |
+| `source` | Which agent (Claude Code, etc.). |
+| `project` | Working directory the session ran in. |
+| `branch` | Git branch, so you can cost a feature. |
+| `day` | Daily series, for charting a trend. |
+| `effort` | Reasoning-effort setting. |
+| `speed` | Standard vs fast, which are priced differently. |
+| `thread` | Main conversation vs subagents — a split no other tool shows. |
 
 ```bash
-agentabacus top --limit 10
+agentabacus report                              # last 30 days, by model
+agentabacus report --since all                  # everything collected
+agentabacus report --since 7d --by project      # last week, by project
+agentabacus report --since all --by day         # daily series, for charting
+agentabacus report --by thread                  # main loop vs subagents
+agentabacus report --since 6m --main-only       # 6 months, no subagents
 ```
 
-### Understand cache usage
+### `agentabacus top`
+
+The most expensive sessions in the window.
+
+| Option | What it does |
+| --- | --- |
+| `--since`, `--source`, `--main-only` | See shared options. |
+| `--limit <n>` | How many sessions to list. Default `10`. |
+
+### `agentabacus cache`
+
+Cache efficiency, with the 1-hour and 5-minute write split priced separately. Cache reads bill at 0.1× input, 5-minute writes at 1.25×, 1-hour writes at 2× — on a long session this is usually where the spend is.
+
+| Option | What it does |
+| --- | --- |
+| `--since`, `--source`, `--main-only` | See shared options. |
+
+### `agentabacus tools`
+
+Tool-call volume and error rate — the effectiveness side rather than the cost side.
+
+| Option | What it does |
+| --- | --- |
+| `--since`, `--source`, `--main-only` | See shared options. |
+| `--limit <n>` | How many tools to list. Default `20`. |
+
+### `agentabacus doctor`
+
+Which agents are on this machine, what has been collected, and any model in your data with no pricing row. Takes no options.
+
+### `agentabacus export`
+
+Writes one file per table, plus the costed view, for dbt / Metabase / anything that reads files.
+
+| Option | What it does |
+| --- | --- |
+| `--out <dir>` | Directory to write into, created if missing. Default `./agentabacus_export`. |
+| `--format <fmt>` | `parquet` (typed, smaller) or `csv` (portable). Default `parquet`. |
+
+### `agentabacus sql`
+
+Run SQL directly against the archive. **Run it with no query to print the schema** — every table, view, column and row count, so you never have to guess a table name.
+
+| Argument | What it does |
+| --- | --- |
+| *(no argument)* | Print the schema and example queries, then exit. |
+| `"<SQL>"` | Run it. DuckDB dialect. |
+| `--schema` | Same as passing no query. |
 
 ```bash
-agentabacus cache
+agentabacus sql                                                  # what can I query?
+agentabacus sql "SELECT model_id, count(*) FROM turns GROUP BY 1"
 ```
 
-### Analyse tool calls
-
-```bash
-agentabacus tools
-```
-
-### Export your data
-
-Export to Parquet for use with your own analytics tools:
-
-```bash
-agentabacus export --format parquet
-```
-
-### Query the data directly
-
-The underlying data is stored in DuckDB:
-
-```bash
-agentabacus sql "SELECT * FROM turns LIMIT 10"
-```
+Main tables: `turns` (one row per request), `turns_costed` (the same plus `cost_usd` — use this one when you want money), `sessions`, `tool_calls`, `prompts`, `pricing`.
 
 ## Supported agents
 

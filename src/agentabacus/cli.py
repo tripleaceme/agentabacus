@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import typer
@@ -23,12 +24,40 @@ from .agents import AGENTS, BY_FLAG, CONTRIBUTING_URL, SUPPORTED, installed
 from .config import DB_PATH
 from .discovery import discover
 
+BANNER = r"""
+                        _        _
+  __ _  __ _  ___ _ __ | |_ __ _| |__   __ _  ___ _   _ ___
+ / _` |/ _` |/ _ \ '_ \| __/ _` | '_ \ / _` |/ __| | | / __|
+| (_| | (_| |  __/ | | | || (_| | |_) | (_| | (__| |_| \__ \
+ \__,_|\__, |\___|_| |_|\__\__,_|_.__/ \__,_|\___|\__,_|___/
+       |___/
+"""
+
+EPILOG = """[bold]Typical first run[/bold]
+
+  agentabacus doctor            see which agents are on this machine
+  agentabacus collect           read their logs into the local archive
+  agentabacus report            what the last 30 days cost
+
+[bold]Every command takes --help[/bold], e.g. [cyan]agentabacus report --help[/cyan]
+
+The archive is one DuckDB file at [cyan]~/.agentabacus/agentabacus.duckdb[/cyan]
+(override with [cyan]$AGENTABACUS_HOME[/cyan]). Nothing is uploaded anywhere.
+"""
+
 app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
-    help="Local-first analytics for AI coding agents. Reads logs already on your disk.",
+    rich_markup_mode="rich",
+    help=(
+        "[bold]Local-first analytics for AI coding agents.[/bold]\n\n"
+        "Reads the session logs your agents already write to disk and tells you "
+        "what they cost. No server, no account, no telemetry."
+    ),
+    epilog=EPILOG,
 )
 console = Console()
+
 
 
 # Widest agent label, so the two lists in `doctor` line up with each other.
@@ -89,13 +118,18 @@ def _unsupported_note(prefix: str = "") -> None:
     console.print(
         f"{prefix}[yellow]Also found on this machine:[/yellow] {names}"
     )
+    # OSC-8 hyperlink: modern terminals render the label and hide the URL.
+    # Older ones fall back to showing the label followed by the bare link, so
+    # the address is never actually lost.
     console.print(
-        "  [dim]agentabacus has no adapter for these yet, so their logs are not\n"
-        "  collected. Adding one is a single file — contributions welcome:[/dim]"
+        "[dim]agentabacus has no adapter for these yet, so their logs are not "
+        f"collected. Contributions are welcome:[/dim] {_link('CONTRIBUTING.md')}"
     )
-    # soft_wrap: let the terminal wrap the URL rather than rich breaking it
-    # mid-token, which would stop it being click-to-open.
-    console.print(f"  [underline]{CONTRIBUTING_URL}[/underline]", soft_wrap=True)
+
+
+def _link(label: str, url: str = "") -> str:
+    """A clickable label instead of a wall of URL."""
+    return f"[link={url or CONTRIBUTING_URL}][cyan]{label}[/cyan][/link]"
 
 
 def _selected_agents(flags: dict[str, bool]) -> list[str] | None:
@@ -115,8 +149,7 @@ def _selected_agents(flags: dict[str, bool]) -> list[str] | None:
                 f"[red]{agent.label} is not supported yet.[/red] "
                 f"agentabacus has no adapter for its logs."
             )
-        console.print(f"\nAdding one is a single file:")
-        console.print(f"  [underline]{CONTRIBUTING_URL}[/underline]", soft_wrap=True)
+        console.print(f"\nContributions are welcome: {_link('CONTRIBUTING.md')}")
         raise typer.Exit(1)
 
     return [a.name for a in chosen]
@@ -132,7 +165,12 @@ def _open(read_only: bool = False):
 # --------------------------------------------------------------------------
 
 
-@app.command()
+@app.command(epilog="""[bold]Examples[/bold]
+
+  agentabacus collect               every supported agent
+  agentabacus collect --claude      just Claude Code
+  agentabacus collect --full        re-read everything from scratch
+""")
 def collect(
     # One flag per known agent. With none given, every supported agent is
     # collected; adding an agent means adding its flag here.
@@ -143,9 +181,21 @@ def collect(
     cursor: bool = typer.Option(False, "--cursor", help="Collect Cursor only."),
     cline: bool = typer.Option(False, "--cline", help="Collect Cline only."),
     aider: bool = typer.Option(False, "--aider", help="Collect Aider only."),
-    full: bool = typer.Option(False, "--full", help="Re-read every file from byte 0."),
-    session_id: str = typer.Option(None, "--session-id", help="Collect only this session (hook mode)."),
-    quiet: bool = typer.Option(False, "--quiet", "-q", help="Print nothing on success."),
+    full: bool = typer.Option(
+        False, "--full",
+        help=(
+            "Ignore saved read positions and re-read every log from the start. "
+            "Use after upgrading, or if numbers look wrong."
+        ),
+    ),
+    session_id: str = typer.Option(
+        None, "--session-id",
+        help="Collect a single session by id. Used by the Claude Code SessionEnd hook.",
+    ),
+    quiet: bool = typer.Option(
+        False, "--quiet", "-q",
+        help="Print nothing unless something failed. Also disables the progress bar.",
+    ),
 ):
     """Read new log data into the local archive. Safe to run repeatedly.
 
@@ -233,13 +283,28 @@ def collect(
         _unsupported_note(prefix="\n")
 
 
-@app.command()
+@app.command(epilog="""[bold]Examples[/bold]
+
+  agentabacus report                              last 30 days, by model
+  agentabacus report --since all                  everything ever collected
+  agentabacus report --since 7d --by project      last week, by project
+  agentabacus report --since all --by day         daily series, for charting
+  agentabacus report --by thread                  main loop vs subagents
+  agentabacus report --since 6m --main-only       6 months, excluding subagents
+""")
 def report(
-    since: str = typer.Option("30d", "--since", help="7d, 24h, 4w, or all."),
-    by: str = typer.Option("model", "--by", help="model, source, project, branch, day, effort, speed, thread."),
-    source: str = typer.Option(None, "--source"),
-    main_only: bool = typer.Option(False, "--main-only", help="Exclude subagent threads."),
-    limit: int = typer.Option(25, "--limit"),
+    since: str = typer.Option("30d", "--since", help="Time window: 24h, 7d, 4w, 6m, or all. Counts back from now.  [default: 30d]"),
+    by: str = typer.Option(
+        "model", "--by",
+        help=(
+            "Group the breakdown by: model, source, project, branch, day, "
+            "effort, speed, or thread. 'thread' splits your main conversation "
+            "from subagent work.  [default: model]"
+        ),
+    ),
+    source: str = typer.Option(None, "--source", help="Limit to one agent, e.g. claude_code. Default is every agent in the archive."),
+    main_only: bool = typer.Option(False, "--main-only", help="Exclude subagent threads, counting only the main conversation."),
+    limit: int = typer.Option(25, "--limit", help="Rows in the breakdown table."),
 ):
     """Cost and token totals, with a breakdown."""
     conn = _open(read_only=True)
@@ -290,12 +355,16 @@ def report(
         _unsupported_note(prefix="\n")
 
 
-@app.command()
+@app.command(epilog="""[bold]Examples[/bold]
+
+  agentabacus top                        10 priciest sessions, last 30 days
+  agentabacus top --since all --limit 25 all time, 25 rows
+""")
 def top(
-    since: str = typer.Option("30d", "--since"),
-    limit: int = typer.Option(10, "--limit"),
-    source: str = typer.Option(None, "--source"),
-    main_only: bool = typer.Option(False, "--main-only"),
+    since: str = typer.Option("30d", "--since", help="Time window: 24h, 7d, 4w, 6m, or all. Counts back from now.  [default: 30d]"),
+    limit: int = typer.Option(10, "--limit", help="How many sessions to list."),
+    source: str = typer.Option(None, "--source", help="Limit to one agent, e.g. claude_code. Default is every agent in the archive."),
+    main_only: bool = typer.Option(False, "--main-only", help="Exclude subagent threads, counting only the main conversation."),
 ):
     """The most expensive sessions in the window."""
     conn = _open(read_only=True)
@@ -308,11 +377,18 @@ def top(
     )
 
 
-@app.command()
+@app.command(epilog="""[bold]Examples[/bold]
+
+  agentabacus cache                 last 30 days
+  agentabacus cache --since all     all time
+
+Cache reads bill at 0.1x input, 5-minute writes at 1.25x, 1-hour writes at 2x.
+This is where most of the spend on a long session usually is.
+""")
 def cache(
-    since: str = typer.Option("30d", "--since"),
-    source: str = typer.Option(None, "--source"),
-    main_only: bool = typer.Option(False, "--main-only"),
+    since: str = typer.Option("30d", "--since", help="Time window: 24h, 7d, 4w, 6m, or all. Counts back from now.  [default: 30d]"),
+    source: str = typer.Option(None, "--source", help="Limit to one agent, e.g. claude_code. Default is every agent in the archive."),
+    main_only: bool = typer.Option(False, "--main-only", help="Exclude subagent threads, counting only the main conversation."),
 ):
     """Cache efficiency, with the 1h vs 5m write split priced separately."""
     conn = _open(read_only=True)
@@ -330,12 +406,17 @@ def cache(
     )
 
 
-@app.command()
+@app.command(epilog="""[bold]Examples[/bold]
+
+  agentabacus tools                     last 30 days
+  agentabacus tools --since all         all time
+  agentabacus tools --main-only         exclude subagent tool calls
+""")
 def tools(
-    since: str = typer.Option("30d", "--since"),
-    source: str = typer.Option(None, "--source"),
-    main_only: bool = typer.Option(False, "--main-only"),
-    limit: int = typer.Option(20, "--limit"),
+    since: str = typer.Option("30d", "--since", help="Time window: 24h, 7d, 4w, 6m, or all. Counts back from now.  [default: 30d]"),
+    source: str = typer.Option(None, "--source", help="Limit to one agent, e.g. claude_code. Default is every agent in the archive."),
+    main_only: bool = typer.Option(False, "--main-only", help="Exclude subagent threads, counting only the main conversation."),
+    limit: int = typer.Option(20, "--limit", help="How many tools to list."),
 ):
     """Tool-call volume and error rate — the effectiveness side."""
     conn = _open(read_only=True)
@@ -386,7 +467,7 @@ def doctor():
             "  adapter for them yet, so nothing from them is collected.\n"
             "  Adding an adapter is a single file:[/dim]"
         )
-        console.print(f"  [underline]{CONTRIBUTING_URL}[/underline]", soft_wrap=True)
+        console.print(f"  {_link('CONTRIBUTING.md')}")
 
     missing = [
         a.label for a in AGENTS
@@ -416,10 +497,22 @@ def doctor():
         console.print("\n[green]Every observed model has a pricing row.[/green]")
 
 
-@app.command()
+@app.command(epilog="""[bold]Examples[/bold]
+
+  agentabacus export                                  parquet into ./agentabacus_export
+  agentabacus export --format csv --out ~/Desktop/aa  csv, somewhere else
+
+Writes one file per table plus the costed view, ready for dbt or Metabase.
+""")
 def export(
-    out: Path = typer.Option(Path("./agentabacus_export"), "--out"),
-    fmt: str = typer.Option("parquet", "--format", help="parquet or csv."),
+    out: Path = typer.Option(
+        Path("./agentabacus_export"), "--out",
+        help="Directory to write into. Created if missing.  [default: ./agentabacus_export]",
+    ),
+    fmt: str = typer.Option(
+        "parquet", "--format",
+        help="parquet (typed, smaller) or csv (portable).  [default: parquet]",
+    ),
 ):
     """Write the tables out for dbt / Metabase / anything that reads files."""
     if fmt not in {"parquet", "csv"}:
@@ -437,15 +530,115 @@ def export(
 
 
 @app.command()
-def sql(query: str = typer.Argument(..., help="Any SQL against the archive.")):
-    """Escape hatch: run SQL directly. The schema is yours."""
+def sql(
+    query: str = typer.Argument(
+        None,
+        help="SQL to run. Omit it to print the schema instead.",
+    ),
+    schema: bool = typer.Option(
+        False, "--schema", help="List every table, view and column, then exit."
+    ),
+):
+    """Escape hatch: run SQL directly against the archive.
+
+    Run it with no query to see what you can query.
+    """
     conn = _open(read_only=True)
-    result = conn.execute(query)
+
+    # Telling someone "the schema is yours" is useless if they cannot discover
+    # the table names. No query means show them, rather than an argument error.
+    if schema or not query:
+        _print_schema(conn)
+        raise typer.Exit(0)
+
+    try:
+        result = conn.execute(query)
+    except Exception as exc:
+        console.print(f"[red]{type(exc).__name__}: {exc}[/red]")
+        console.print(
+            "\n[dim]Run [bold]agentabacus sql[/bold] with no query to list "
+            "tables and columns.[/dim]"
+        )
+        raise typer.Exit(2)
+
+    if result.description is None:          # a statement returning no rows
+        console.print("[dim]ok[/dim]")
+        raise typer.Exit(0)
+
     columns = [d[0] for d in result.description]
     rows = result.fetchall()
     _table("", columns, rows, [str] * len(columns))
     console.print(f"[dim]{len(rows)} row(s)[/dim]")
 
 
+# What each table is for, in one line. Column lists come from the database, so
+# they cannot drift; these descriptions are the part a schema dump cannot give.
+_TABLE_NOTES = {
+    "turns": "One row per LLM request. The main table.",
+    "turns_costed": "turns + cost_usd, priced at the rate in force when it ran.",
+    "turns_normalized": "turns with model aliases resolved.",
+    "sessions": "One row per session (and per subagent thread).",
+    "session_totals": "Per-session rollup: requests, cost, tokens.",
+    "tool_calls": "One row per tool invocation, with is_error.",
+    "prompts": "One row per prompt. Hash and length only, never the text.",
+    "pricing": "Effective-dated price table, joined on the request timestamp.",
+}
+
+
+def _print_schema(conn) -> None:
+    objects = conn.execute(
+        """
+        SELECT table_name, table_type
+        FROM information_schema.tables
+        WHERE table_schema = 'main' AND table_name NOT LIKE '\\_%' ESCAPE '\\'
+        ORDER BY table_type DESC, table_name
+        """
+    ).fetchall()
+
+    console.print("\n[bold]Tables and views in your archive[/bold]\n")
+    for name, kind in objects:
+        columns = [
+            r[0] for r in conn.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema='main' AND table_name=? ORDER BY ordinal_position",
+                [name],
+            ).fetchall()
+        ]
+        rows = conn.execute(f'SELECT count(*) FROM "{name}"').fetchone()[0]
+        label = "view" if kind == "VIEW" else "table"
+        console.print(f"  [cyan]{name}[/cyan] [dim]({label}, {rows:,} rows)[/dim]")
+        if note := _TABLE_NOTES.get(name):
+            console.print(f"    [dim]{note}[/dim]")
+        console.print(f"    [dim]{', '.join(columns)}[/dim]\n")
+
+    console.print("[bold]Examples[/bold]\n")
+    console.print(
+        '  agentabacus sql "SELECT model_id, count(*) FROM turns GROUP BY 1"\n'
+        '  agentabacus sql "SELECT sum(cost_usd) FROM turns_costed WHERE ts >= now() - INTERVAL 7 DAY"\n'
+        '  agentabacus sql "SELECT tool_name, avg(is_error::INT) FROM tool_calls GROUP BY 1"\n'
+    )
+    console.print(
+        "[dim]It is DuckDB SQL. Prefer [bold]turns_costed[/bold] over "
+        "[bold]turns[/bold] when you want money.[/dim]"
+    )
+
+
 if __name__ == "__main__":
+    main()
+
+
+def main() -> None:
+    """Console-script entry point.
+
+    The banner is printed here rather than from a Typer callback because
+    `--help` short-circuits inside Click before any callback runs, and rich
+    would reflow the ASCII art if it were part of the help string.
+    """
+    argv = sys.argv[1:]
+    if not argv or argv[0] in {"-h", "--help"}:
+        console.print(f"[#e0a340]{BANNER}[/#e0a340]", highlight=False)
     app()
+
+
+if __name__ == "__main__":
+    main()
