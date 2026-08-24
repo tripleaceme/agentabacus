@@ -60,13 +60,21 @@ jobs:
         with:
           python-version: "3.11"
 
-      # A README-only merge should not cut a release.
+      # Merges that change nothing shippable should not cut a release.
+      #
+      # README.md counts. PyPI bakes the long description into the
+      # distribution at build time, so the project page can only change by
+      # publishing a new version -- leaving it out meant every README edit
+      # silently left PyPI showing older text than GitHub.
+      #
+      # CONTRIBUTING, workflows and scripts deliberately do not count: they
+      # are not part of what gets installed.
       - name: Does this merge ship anything?
         id: paths
         run: |
           CHANGED=$(git diff --name-only "${{ github.event.before }}".."${{ github.sha }}" 2>/dev/null || echo "src/")
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(src/|pyproject\.toml)'; then
+          if echo "$CHANGED" | grep -qE '^(src/|pyproject\.toml|README\.md)'; then
             echo "ship=true" >> "$GITHUB_OUTPUT"
           else
             echo "ship=false" >> "$GITHUB_OUTPUT"
