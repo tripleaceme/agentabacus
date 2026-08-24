@@ -538,7 +538,7 @@ def doctor():
         console.print(
             "\n  [dim]These agents keep logs on this machine, but agentabacus has no\n"
             "  adapter for them yet, so nothing from them is collected.\n"
-            "  Adding an adapter is a single file:[/dim]"
+            "  Contribute one at:[/dim]"
         )
         console.print(f"  {_link('CONTRIBUTING.md')}")
 
