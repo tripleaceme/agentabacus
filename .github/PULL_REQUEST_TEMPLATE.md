@@ -40,14 +40,7 @@ paste here
 
 </details>
 
-Then confirm each of these against that output — a reviewer will read the
-numbers, not just the ticks:
-
-- [ ] Model names are real, not `(unknown)` — rows without a model price at zero
-- [ ] Costs are plausible for what you actually spent
-- [ ] Token counts are per request, not a running session total
-- [ ] `JSONL lines collapsed into N requests` shows dedupe firing, if the format repeats usage
-- [ ] Fixtures added under `tests/fixtures/<agent>/` — redacted, no prompts, no code, no keys
+Then confirm each of these against that output, a reviewer will read the numbers, not just the ticks.
 
 ## Checks that run automatically
 

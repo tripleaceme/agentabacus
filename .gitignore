@@ -10,9 +10,11 @@ build/
 agentabacus_export/
 .pytest_cache/
 
-# assets/ holds only the social preview and its source. Anything else that
-# lands there is a stray file, not a project asset -- keep it out of commits.
+# assets/ is an allowlist: the social preview and the README screenshots,
+# nothing else. A stray file dropped in here is not a project asset, and one
+# was committed by accident once already.
 assets/*
 !assets/social-preview.png
 !assets/social-preview.html
+!assets/shot-*.png
 src/agentabacus/_version.py

@@ -21,6 +21,8 @@ AI coding agents generate session logs, but each agent stores them differently. 
 
 No server. No account. No telemetry. Your data stays on your machine.
 
+<img src="https://raw.githubusercontent.com/tripleaceme/agentabacus/main/assets/shot-report.png" alt="agentabacus report --by model" width="100%">
+
 ## Install
 
 Try it without installing:
@@ -34,6 +36,10 @@ Or install it permanently:
 ```bash
 pipx install agentabacus
 ```
+
+Running it with no arguments shows the whole surface:
+
+<img src="https://raw.githubusercontent.com/tripleaceme/agentabacus/main/assets/shot-welcome.png" alt="agentabacus --help" width="100%">
 
 Then check what `agentabacus` can find:
 
@@ -78,7 +84,7 @@ agentabacus report --by model
 ```
 
 For example, `--by thread` separates your main agent from its subagents.
-Every grouping is listed in the [command reference](#agentabacus-report) below.
+Every grouping is listed in the **[command reference](#agentabacus-report)** below.
 
 ## Command reference
 
@@ -129,7 +135,7 @@ Cost and token totals, with a breakdown.
 | `day` | Daily series, for charting a trend. |
 | `effort` | Reasoning-effort setting. |
 | `speed` | Standard vs fast, which are priced differently. |
-| `thread` | Main conversation vs subagents — a split no other tool shows. |
+| `thread` | Main conversation vs subagents. |
 
 ```bash
 agentabacus report                              # last 30 days, by model
@@ -157,18 +163,22 @@ Cache efficiency, with the 1-hour and 5-minute write split priced separately. Ca
 | --- | --- |
 | `--since`, `--source`, `--main-only` | See shared options. |
 
+<img src="https://raw.githubusercontent.com/tripleaceme/agentabacus/main/assets/shot-cache.png" alt="agentabacus cache" width="100%">
+
 ### `agentabacus tools`
 
-Tool-call volume and error rate — the effectiveness side rather than the cost side.
+Tool-call volume and error rate.
 
 | Option | What it does |
 | --- | --- |
 | `--since`, `--source`, `--main-only` | See shared options. |
 | `--limit <n>` | How many tools to list. Default `20`. |
 
+<img src="https://raw.githubusercontent.com/tripleaceme/agentabacus/main/assets/shot-tools.png" alt="agentabacus tools" width="100%">
+
 ### `agentabacus schedule`
 
-Collect automatically in the background, on an interval you choose. Uses your operating system's own scheduler — there is no agentabacus daemon.
+Collect automatically in the background, on an interval you choose. Uses your operating system's own scheduler.
 
 | Option | What it does |
 | --- | --- |
@@ -182,13 +192,15 @@ agentabacus schedule               # is it on?
 agentabacus schedule --off         # stop
 ```
 
+<img src="https://raw.githubusercontent.com/tripleaceme/agentabacus/main/assets/shot-schedule-help.png" alt="agentabacus schedule --help" width="100%">
+
 | Platform | What gets created |
 | --- | --- |
 | macOS | `~/Library/LaunchAgents/tech.agentabacus.collect.plist` |
 | Linux | `~/.config/systemd/user/agentabacus-collect.timer` |
 | Windows | A Task Scheduler task named `agentabacus collect` |
 
-Output goes to `~/.agentabacus/collect.log`. Collection is incremental, so a long interval costs nothing and loses nothing — `6h` is a good default.
+Output goes to `~/.agentabacus/collect.log`. Collection is incremental, so a long or short interval costs nothing and loses nothing and `6h` is a good default.
 
 This complements the Claude Code plugin rather than replacing it. The `SessionEnd` hook archives a session the moment it closes; the schedule also catches sessions that never exited cleanly, and every agent that has no hook at all.
 
@@ -198,7 +210,7 @@ Which agents are on this machine, what has been collected, and any model in your
 
 ### `agentabacus export`
 
-Writes one file per table, plus the costed view, for dbt / Metabase / anything that reads files.
+Writes one file per table, plus the costed view.
 
 | Option | What it does |
 | --- | --- |
@@ -207,7 +219,7 @@ Writes one file per table, plus the costed view, for dbt / Metabase / anything t
 
 ### `agentabacus sql`
 
-Run SQL directly against the archive. **Run it with no query to print the schema** — every table, view, column and row count, so you never have to guess a table name.
+Run SQL directly against the archive. **Run it with no query to print the schema**, every table, view, column and row count, so you never have to guess a table name.
 
 | Argument | What it does |
 | --- | --- |
@@ -233,24 +245,15 @@ Main tables: `turns` (one row per request), `turns_costed` (the same plus `cost_
 | Cursor      | Open for contribution |
 | Cline       | Open for contribution |
 | Aider       | Open for contribution |
+| Others      | Open for contribution |
 
-`agentabacus doctor` detects every agent on this list that is installed on your
-machine, whether or not it is supported yet:
+`agentabacus doctor` detects every agent on this list that is installed on your machine, whether or not it is supported yet:
 
-```text
-Supported agents
-  Claude Code    163 log file(s)  /Users/you/.claude
+<img src="https://raw.githubusercontent.com/tripleaceme/agentabacus/main/assets/shot-doctor.png" alt="agentabacus doctor" width="100%">
 
-Detected, not supported yet
-  Codex CLI      /Users/you/.codex
-  Gemini CLI     /Users/you/.gemini
+Nothing from an unsupported agent is ever parsed, stored, or counted. An adapter is either finished and trusted or it is not there, so there is no half-supported state producing numbers you would have to decide whether to believe.
 
-  These agents keep logs on this machine, but agentabacus has no
-  adapter for them yet, so nothing from them is collected.
-  You can contribute by [adding it](CONTRIBUTING.md#contributing-an-adapter)
-```
-
-
+If one of these is yours, [adding it](CONTRIBUTING.md#2-add-an-adapter) is a single file.
 
 ## How it works
 
@@ -345,7 +348,6 @@ python -m pytest
 
 * More agent adapters
 * Local dashboard
-* Edit-survival metrics
 * Warehouse exports
 * dbt integration
 * GitHub Actions for usage rollups
