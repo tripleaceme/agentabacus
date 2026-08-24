@@ -232,7 +232,7 @@ agentabacus sql                                                  # what can I qu
 agentabacus sql "SELECT model_id, count(*) FROM turns GROUP BY 1"
 ```
 
-Main tables: `turns` (one row per request), `turns_costed` (the same plus `cost_usd` — use this one when you want money), `sessions`, `tool_calls`, `prompts`, `pricing`.
+Main tables: `turns` (one row per request), `turns_costed`, `sessions`, `tool_calls`, `prompts`, `pricing`.
 
 ## Supported agents
 
@@ -251,9 +251,7 @@ Main tables: `turns` (one row per request), `turns_costed` (the same plus `cost_
 
 <img src="https://raw.githubusercontent.com/tripleaceme/agentabacus/main/assets/shot-doctor.png" alt="agentabacus doctor" width="100%">
 
-Nothing from an unsupported agent is ever parsed, stored, or counted. An adapter is either finished and trusted or it is not there, so there is no half-supported state producing numbers you would have to decide whether to believe.
-
-If one of these is yours, [adding it](CONTRIBUTING.md#2-add-an-adapter) is a single file.
+Nothing from an unsupported agent is ever parsed, stored, or counted. You can contribute by [adding it](CONTRIBUTING.md#2-add-an-adapter).
 
 ## How it works
 
